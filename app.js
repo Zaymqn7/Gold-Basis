@@ -1,5 +1,5 @@
 // app.js — GOLD BASIS MONITOR
-// Pyth + Binance Futures + Hyperliquid + Binance Spot USDCUSDT conversion
+// Pyth + Binance Futures + Hyperliquid + Meteora DLMM + Binance Spot USDCUSDT conversion
 // Chart.js uses category x-axis (no time adapter).
 
 // ---------- Config ----------
@@ -19,6 +19,10 @@ const BINANCE_SPOT_BOOK_TICKER =
 
 // Hyperliquid
 const HL_INFO = "https://api.hyperliquid.xyz/info";
+
+// Meteora DLMM pool (from your link)
+const METEORA_POOL_ADDRESS = "3Vj8miZuTSdonf4W1xLdYFatrXLm38CShrCi7NbZS5Ah";
+const METEORA_POOL_URL = `https://dlmm.datapi.meteora.ag/pools/${METEORA_POOL_ADDRESS}`;
 
 // Staleness thresholds (ms)
 const STALE_MS = 30_000;
@@ -83,6 +87,18 @@ function setBasisGlow(el, value) {
   if (!Number.isFinite(value)) return;
   if (value > 0) el.classList.add("pos");
   else if (value < 0) el.classList.add("neg");
+}
+
+function isGoldLike(sym) {
+  const s = String(sym || "").toUpperCase();
+  return s.includes("GOLD") || s.includes("XAU");
+}
+function isUsdcLike(sym) {
+  const s = String(sym || "").toUpperCase();
+  return s.includes("USDC");
+}
+function inGoldUsdRange(x) {
+  return Number.isFinite(x) && x > 100 && x < 10000;
 }
 
 // ---------- Data fetchers ----------
@@ -166,28 +182,55 @@ async function fetchHyperliquidMid() {
 
   const mids = await midsRes.json();
 
-  // Try common keys
   let px = null;
   const candidates = ["GOLD", "flx:GOLD", "GOLD-USDC"];
   for (const k of candidates) {
     if (mids && mids[k] != null) { px = mids[k]; break; }
   }
-
-  // fallback: any key containing GOLD
   if (px == null && mids && typeof mids === "object") {
     const hit = Object.keys(mids).find((k) => k.toUpperCase().includes("GOLD"));
     if (hit) px = mids[hit];
   }
 
   const mid = Number(px);
-  if (!Number.isFinite(mid)) {
-    const goldKeys =
-      mids && typeof mids === "object"
-        ? Object.keys(mids).filter((k) => k.toUpperCase().includes("GOLD")).slice(0, 30)
-        : [];
-    throw new Error(`Hyperliquid: GOLD not found on dex="${dexName}". Keys: ${goldKeys.join(", ")}`);
+  if (!Number.isFinite(mid)) throw new Error("Hyperliquid mid not finite");
+  return { mid };
+}
+
+// Meteora DLMM: GET /pools/{address} -> current_price (pool price) :contentReference[oaicite:1]{index=1}
+async function fetchMeteoraMid() {
+  const res = await fetch(METEORA_POOL_URL);
+  if (!res.ok) throw new Error(`Meteora HTTP ${res.status}`);
+
+  const j = await res.json();
+  const p = Number(j?.current_price);
+  if (!Number.isFinite(p) || p <= 0) throw new Error("Meteora current_price missing");
+
+  const sx = j?.token_x?.symbol;
+  const sy = j?.token_y?.symbol;
+
+  // We want USD per GOLD. current_price direction can vary by pair orientation.
+  // Strategy:
+  // 1) If it looks like GOLD/USDC pair, choose orientation using magnitude (gold is ~100..10000).
+  // 2) Otherwise still pick the orientation that falls into gold price range.
+  const direct = p;
+  const inv = 1 / p;
+
+  let mid = direct;
+  if (inGoldUsdRange(direct) && !inGoldUsdRange(inv)) mid = direct;
+  else if (!inGoldUsdRange(direct) && inGoldUsdRange(inv)) mid = inv;
+  else {
+    // If both "plausible" or both not, fall back using symbol hints:
+    const goldX = isGoldLike(sx), goldY = isGoldLike(sy);
+    const usdcX = isUsdcLike(sx), usdcY = isUsdcLike(sy);
+
+    // If token_x is GOLD and token_y is USDC, direct is likely USDC per GOLD
+    if (goldX && usdcY) mid = direct;
+    else if (usdcX && goldY) mid = inv;
+    else mid = direct; // last fallback
   }
 
+  if (!Number.isFinite(mid)) throw new Error("Meteora mid not finite");
   return { mid };
 }
 
@@ -213,13 +256,13 @@ const state = {
   pyth: { price: NaN, publishTimeMs: 0, lastOkMs: 0, err: "" },
   binance: { mid: NaN, lastFundingRate: NaN, nextFundingTimeMs: 0, lastOkMs: 0, err: "" },
   hl: { mid: NaN, lastOkMs: 0, err: "" },
+  meteora: { mid: NaN, lastOkMs: 0, err: "" },
   usdcusdt: { mid: NaN, lastOkMs: 0, err: "" },
 
-  // points: { t, binUsd, binBps, hlUsd, hlBps }
+  // points: { t, binUsd, binBps, hlUsd, hlBps, metUsd, metBps }
   points: [],
   chart: null,
 
-  // timers
   pollTimer: null,
   uiTimer: null,
 };
@@ -233,8 +276,10 @@ function setGlobalError(msg) {
 function setGlobalStatus() {
   const now = nowMs();
   const pOk = state.pyth.lastOkMs && (now - state.pyth.lastOkMs) <= STALE_MS;
+
   const bOk = state.binance.lastOkMs && (now - state.binance.lastOkMs) <= STALE_MS;
   const hOk = state.hl.lastOkMs && (now - state.hl.lastOkMs) <= STALE_MS;
+  const mOk = state.meteora.lastOkMs && (now - state.meteora.lastOkMs) <= STALE_MS;
 
   const badge = $("globalStatus");
   if (badge) {
@@ -246,7 +291,7 @@ function setGlobalStatus() {
     if (!pOk) {
       text = state.pyth.lastOkMs ? "STALE" : "ERROR";
       cls = state.pyth.lastOkMs ? "warn" : "bad";
-    } else if (!bOk || !hOk) {
+    } else if (!bOk || !hOk || !mOk) {
       text = "PARTIAL";
       cls = "warn";
     }
@@ -279,6 +324,10 @@ function paintStrip() {
   setDot("dotHL", statusFromAge(state.hl.lastOkMs));
   $("pxHL").textContent = fmtUsd(state.hl.mid, 2);
   $("ageHL").textContent = ageText(state.hl.lastOkMs);
+
+  setDot("dotMeteora", statusFromAge(state.meteora.lastOkMs));
+  $("pxMeteora").textContent = fmtUsd(state.meteora.mid, 2);
+  $("ageMeteora").textContent = ageText(state.meteora.lastOkMs);
 }
 
 function paintTable() {
@@ -322,13 +371,21 @@ function paintTable() {
 
   setBasisGlow($("tblHLBasisUsd"), hUsd);
   setBasisGlow($("tblHLBasisBps"), hBps);
+
+  // Meteora
+  const mUsd = basisUsd(state.meteora.mid, ref);
+  const mBps = basisBps(state.meteora.mid, ref);
+
+  $("tblMeteoraMid").textContent = fmtUsd(state.meteora.mid, 2);
+  $("tblMeteoraBasisUsd").textContent = mUsd == null ? "—" : fmtUsd(mUsd, 2);
+  $("tblMeteoraBasisBps").textContent = mBps == null ? "—" : fmtBps(mBps);
+
+  setBasisGlow($("tblMeteoraBasisUsd"), mUsd);
+  setBasisGlow($("tblMeteoraBasisBps"), mBps);
 }
 
 function paintConversion() {
-  // implied XAUUSDC = XAUUSDT / (USDCUSDT)
   $("convXauUsdt").textContent = fmtUsd(state.binance.mid, 2);
-
-  // USDCUSDT is "USDT per 1 USDC" ~ 1.000x (but can deviate)
   $("convUsdcUsdt").textContent = fmtNum(state.usdcusdt.mid, 6);
 
   let implied = NaN;
@@ -351,6 +408,7 @@ function buildChart() {
       datasets: [
         { label: "BINANCE basis", data: [], borderWidth: 2, pointRadius: 0, tension: 0.15 },
         { label: "HYPERLIQUID basis", data: [], borderWidth: 2, pointRadius: 0, tension: 0.15 },
+        { label: "METEORA basis", data: [], borderWidth: 2, pointRadius: 0, tension: 0.15 },
       ],
     },
     options: {
@@ -388,13 +446,16 @@ function syncChart() {
   if (!state.chart) return;
 
   prunePoints();
+
   const labels = state.points.map((p) => timeLabel(p.t));
   const bin = state.points.map((p) => (state.unit === "usd" ? p.binUsd : p.binBps));
-  const hl = state.points.map((p) => (state.unit === "usd" ? p.hlUsd : p.hlBps));
+  const hl  = state.points.map((p) => (state.unit === "usd" ? p.hlUsd  : p.hlBps));
+  const met = state.points.map((p) => (state.unit === "usd" ? p.metUsd : p.metBps));
 
   state.chart.data.labels = labels;
   state.chart.data.datasets[0].data = bin;
   state.chart.data.datasets[1].data = hl;
+  state.chart.data.datasets[2].data = met;
 
   state.chart.update("none");
 }
@@ -407,71 +468,66 @@ async function tick() {
   state.lastTickMs = started;
   setGlobalError("");
 
-  const [pythR, binR, hlR, usdcR] = await Promise.allSettled([
+  const [pythR, binR, hlR, metR, usdcR] = await Promise.allSettled([
     fetchPythXauUsd(),
     fetchBinanceMidAndFunding(),
     fetchHyperliquidMid(),
+    fetchMeteoraMid(),
     fetchBinanceUsdcUsdtMidSpot(),
   ]);
 
-  // Pyth
   if (pythR.status === "fulfilled") {
     state.pyth.price = pythR.value.price;
     state.pyth.publishTimeMs = pythR.value.publishTimeMs;
     state.pyth.lastOkMs = started;
     state.pyth.err = "";
-  } else {
-    state.pyth.err = String(pythR.reason?.message || pythR.reason);
-  }
+  } else state.pyth.err = String(pythR.reason?.message || pythR.reason);
 
-  // Binance
   if (binR.status === "fulfilled") {
     state.binance.mid = binR.value.mid;
     state.binance.lastFundingRate = binR.value.lastFundingRate;
     state.binance.nextFundingTimeMs = binR.value.nextFundingTimeMs;
     state.binance.lastOkMs = started;
     state.binance.err = "";
-  } else {
-    state.binance.err = String(binR.reason?.message || binR.reason);
-  }
+  } else state.binance.err = String(binR.reason?.message || binR.reason);
 
-  // Hyperliquid
   if (hlR.status === "fulfilled") {
     state.hl.mid = hlR.value.mid;
     state.hl.lastOkMs = started;
     state.hl.err = "";
-  } else {
-    state.hl.err = String(hlR.reason?.message || hlR.reason);
-  }
+  } else state.hl.err = String(hlR.reason?.message || hlR.reason);
 
-  // USDCUSDT spot
+  if (metR.status === "fulfilled") {
+    state.meteora.mid = metR.value.mid;
+    state.meteora.lastOkMs = started;
+    state.meteora.err = "";
+  } else state.meteora.err = String(metR.reason?.message || metR.reason);
+
   if (usdcR.status === "fulfilled") {
     state.usdcusdt.mid = usdcR.value.mid;
     state.usdcusdt.lastOkMs = started;
     state.usdcusdt.err = "";
-  } else {
-    state.usdcusdt.err = String(usdcR.reason?.message || usdcR.reason);
-  }
+  } else state.usdcusdt.err = String(usdcR.reason?.message || usdcR.reason);
 
-  // Append point for chart (nulls create gaps)
   const ref = state.pyth.price;
   state.points.push({
     t: started,
     binUsd: basisUsd(state.binance.mid, ref),
     binBps: basisBps(state.binance.mid, ref),
-    hlUsd: basisUsd(state.hl.mid, ref),
-    hlBps: basisBps(state.hl.mid, ref),
+    hlUsd:  basisUsd(state.hl.mid, ref),
+    hlBps:  basisBps(state.hl.mid, ref),
+    metUsd: basisUsd(state.meteora.mid, ref),
+    metBps: basisBps(state.meteora.mid, ref),
   });
 
-  // Errors to display (non-blocking)
   const errs = [];
   if (state.pyth.err) errs.push(`PYTH: ${state.pyth.err}`);
   if (state.binance.err) errs.push(`BINANCE: ${state.binance.err}`);
   if (state.hl.err) errs.push(`HYPERLIQUID: ${state.hl.err}`);
+  if (state.meteora.err) errs.push(`METEORA: ${state.meteora.err}`);
   if (state.usdcusdt.err) errs.push(`USDCUSDT: ${state.usdcusdt.err}`);
   setGlobalError(errs.join(" • "));
 
-  // Paint
   setGlobalStatus();
   paintStrip();
   paintTable();
@@ -489,7 +545,6 @@ function startPollTimer() {
 
 function startUiTimer() {
   if (state.uiTimer) clearInterval(state.uiTimer);
-  // Smooth "Xs ago" updates every second (no network)
   state.uiTimer = setInterval(() => {
     setGlobalStatus();
     paintStrip();
@@ -544,9 +599,9 @@ function wireControls() {
   try {
     wireControls();
     buildChart();
-    tick();           // immediate
-    startPollTimer(); // network polling
-    startUiTimer();   // smooth "Xs ago"
+    tick();
+    startPollTimer();
+    startUiTimer();
   } catch (e) {
     setGlobalError(`BOOT: ${String(e?.message || e)}`);
     console.error(e);
