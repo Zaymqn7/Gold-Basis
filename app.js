@@ -1,5 +1,6 @@
-// app.js — GOLD BASIS MONITOR (Pyth + Binance + Hyperliquid)
-// Uses Chart.js (already included in index.html) with a simple category x-axis (no time adapter).
+// app.js — GOLD BASIS MONITOR
+// Pyth + Binance Futures + Hyperliquid + Binance Spot USDCUSDT conversion
+// Chart.js uses category x-axis (no time adapter).
 
 // ---------- Config ----------
 const PYTH_XAU_USD_ID =
@@ -11,6 +12,10 @@ const BINANCE_BOOK_TICKER =
   "https://fapi.binance.com/fapi/v1/ticker/bookTicker?symbol=XAUUSDT";
 const BINANCE_PREMIUM_INDEX =
   "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=XAUUSDT";
+
+// Binance Spot (USDCUSDT)
+const BINANCE_SPOT_BOOK_TICKER =
+  "https://api.binance.com/api/v3/ticker/bookTicker?symbol=USDCUSDT";
 
 // Hyperliquid
 const HL_INFO = "https://api.hyperliquid.xyz/info";
@@ -48,7 +53,7 @@ function fmtBps(x) {
 
 function ageText(lastOkMs) {
   if (!lastOkMs) return "—";
-  const s = Math.max(0, Math.round((nowMs() - lastOkMs) / 1000));
+  const s = Math.max(0, Math.floor((nowMs() - lastOkMs) / 1000));
   return `${s}s`;
 }
 
@@ -70,6 +75,14 @@ function timeLabel(ms) {
   const mm = String(d.getMinutes()).padStart(2, "0");
   const ss = String(d.getSeconds()).padStart(2, "0");
   return `${hh}:${mm}:${ss}`;
+}
+
+function setBasisGlow(el, value) {
+  if (!el) return;
+  el.classList.remove("pos", "neg");
+  if (!Number.isFinite(value)) return;
+  if (value > 0) el.classList.add("pos");
+  else if (value < 0) el.classList.add("neg");
 }
 
 // ---------- Data fetchers ----------
@@ -107,19 +120,28 @@ async function fetchBinanceMidAndFunding() {
   const ask = Number(book.askPrice);
   const mid = (bid + ask) / 2;
 
-  const lastFundingRate = Number(prem.lastFundingRate); // e.g. 0.0001
+  const lastFundingRate = Number(prem.lastFundingRate);
   const nextFundingTimeMs = Number(prem.nextFundingTime);
 
   if (!Number.isFinite(mid)) throw new Error("Binance mid not finite");
   return { mid, lastFundingRate, nextFundingTimeMs };
 }
 
-// Hyperliquid: IMPORTANT
-// Your GOLD-USDC market lives on the "flx" (TradFi) perp dex (UI shows flx:GOLD).
-// allMids defaults to the *main* dex unless you pass `dex`.
-// We fetch perpDexs -> pick flx -> then fetch allMids for that dex and extract GOLD.
+async function fetchBinanceUsdcUsdtMidSpot() {
+  const res = await fetch(BINANCE_SPOT_BOOK_TICKER);
+  if (!res.ok) throw new Error(`Binance spot USDCUSDT HTTP ${res.status}`);
+
+  const j = await res.json();
+  const bid = Number(j.bidPrice);
+  const ask = Number(j.askPrice);
+  const mid = (bid + ask) / 2;
+
+  if (!Number.isFinite(mid) || mid <= 0) throw new Error("USDCUSDT mid not finite");
+  return { mid };
+}
+
+// Hyperliquid: query flx dex mids (your market is flx:GOLD / GOLD-USDC in UI)
 async function fetchHyperliquidMid() {
-  // 1) Find the correct perp dex (prefer flx)
   const dexsRes = await fetch(HL_INFO, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -133,11 +155,8 @@ async function fetchHyperliquidMid() {
   );
 
   const dexName =
-    dexObjs.find((d) => String(d.name).toLowerCase() === "flx")?.name ||
-    dexObjs.find((d) => String(d.name).toLowerCase().includes("trad"))?.name ||
-    "flx";
+    dexObjs.find((d) => String(d.name).toLowerCase() === "flx")?.name || "flx";
 
-  // 2) Fetch mids for that dex
   const midsRes = await fetch(HL_INFO, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -147,16 +166,14 @@ async function fetchHyperliquidMid() {
 
   const mids = await midsRes.json();
 
-  // 3) Extract GOLD mid
-  let px = null;
-
   // Try common keys
+  let px = null;
   const candidates = ["GOLD", "flx:GOLD", "GOLD-USDC"];
   for (const k of candidates) {
     if (mids && mids[k] != null) { px = mids[k]; break; }
   }
 
-  // Fallback: any key containing GOLD
+  // fallback: any key containing GOLD
   if (px == null && mids && typeof mids === "object") {
     const hit = Object.keys(mids).find((k) => k.toUpperCase().includes("GOLD"));
     if (hit) px = mids[hit];
@@ -168,9 +185,7 @@ async function fetchHyperliquidMid() {
       mids && typeof mids === "object"
         ? Object.keys(mids).filter((k) => k.toUpperCase().includes("GOLD")).slice(0, 30)
         : [];
-    throw new Error(
-      `Hyperliquid: GOLD not found on dex="${dexName}". GOLD-like keys: ${goldKeys.join(", ")}`
-    );
+    throw new Error(`Hyperliquid: GOLD not found on dex="${dexName}". Keys: ${goldKeys.join(", ")}`);
   }
 
   return { mid };
@@ -192,17 +207,21 @@ const state = {
   paused: false,
   refreshMs: 5000,
   windowMs: 3600000,
-  unit: "usd", // "usd" | "bps"
+  unit: "usd",
   lastTickMs: 0,
 
   pyth: { price: NaN, publishTimeMs: 0, lastOkMs: 0, err: "" },
   binance: { mid: NaN, lastFundingRate: NaN, nextFundingTimeMs: 0, lastOkMs: 0, err: "" },
   hl: { mid: NaN, lastOkMs: 0, err: "" },
+  usdcusdt: { mid: NaN, lastOkMs: 0, err: "" },
 
   // points: { t, binUsd, binBps, hlUsd, hlBps }
   points: [],
-
   chart: null,
+
+  // timers
+  pollTimer: null,
+  uiTimer: null,
 };
 
 // ---------- UI ----------
@@ -227,15 +246,17 @@ function setGlobalStatus() {
     if (!pOk) {
       text = state.pyth.lastOkMs ? "STALE" : "ERROR";
       cls = state.pyth.lastOkMs ? "warn" : "bad";
+    } else if (!bOk || !hOk) {
+      text = "PARTIAL";
+      cls = "warn";
     }
-    if (pOk && (!bOk || !hOk)) { text = "PARTIAL"; cls = "warn"; }
 
     badge.textContent = text;
     badge.classList.add(cls);
   }
 
   const upd = $("globalUpdated");
-  if (upd) upd.textContent = state.lastTickMs ? `${Math.round((now - state.lastTickMs)/1000)}s ago` : "—";
+  if (upd) upd.textContent = state.lastTickMs ? `${ageText(state.lastTickMs)} ago` : "—";
 }
 
 function paintStrip() {
@@ -276,6 +297,9 @@ function paintTable() {
   $("tblBinanceBasisUsd").textContent = bUsd == null ? "—" : fmtUsd(bUsd, 2);
   $("tblBinanceBasisBps").textContent = bBps == null ? "—" : fmtBps(bBps);
 
+  setBasisGlow($("tblBinanceBasisUsd"), bUsd);
+  setBasisGlow($("tblBinanceBasisBps"), bBps);
+
   if (Number.isFinite(state.binance.lastFundingRate)) {
     const frPct = state.binance.lastFundingRate * 100;
     const sign = frPct > 0 ? "+" : "";
@@ -288,8 +312,6 @@ function paintTable() {
     ? new Date(state.binance.nextFundingTimeMs).toLocaleTimeString()
     : "—";
 
-  $("tblBinanceAge").textContent = ageText(state.binance.lastOkMs);
-
   // Hyperliquid
   const hUsd = basisUsd(state.hl.mid, ref);
   const hBps = basisBps(state.hl.mid, ref);
@@ -297,10 +319,26 @@ function paintTable() {
   $("tblHLMid").textContent = fmtUsd(state.hl.mid, 2);
   $("tblHLBasisUsd").textContent = hUsd == null ? "—" : fmtUsd(hUsd, 2);
   $("tblHLBasisBps").textContent = hBps == null ? "—" : fmtBps(hBps);
-  $("tblHLAge").textContent = ageText(state.hl.lastOkMs);
+
+  setBasisGlow($("tblHLBasisUsd"), hUsd);
+  setBasisGlow($("tblHLBasisBps"), hBps);
 }
 
-// ---------- Chart (category axis, no adapters) ----------
+function paintConversion() {
+  // implied XAUUSDC = XAUUSDT / (USDCUSDT)
+  $("convXauUsdt").textContent = fmtUsd(state.binance.mid, 2);
+
+  // USDCUSDT is "USDT per 1 USDC" ~ 1.000x (but can deviate)
+  $("convUsdcUsdt").textContent = fmtNum(state.usdcusdt.mid, 6);
+
+  let implied = NaN;
+  if (Number.isFinite(state.binance.mid) && Number.isFinite(state.usdcusdt.mid) && state.usdcusdt.mid > 0) {
+    implied = state.binance.mid / state.usdcusdt.mid;
+  }
+  $("convXauUsdc").textContent = fmtUsd(implied, 2);
+}
+
+// ---------- Chart ----------
 function buildChart() {
   const canvas = $("basisChart");
   if (!canvas || typeof Chart === "undefined") return;
@@ -350,7 +388,6 @@ function syncChart() {
   if (!state.chart) return;
 
   prunePoints();
-
   const labels = state.points.map((p) => timeLabel(p.t));
   const bin = state.points.map((p) => (state.unit === "usd" ? p.binUsd : p.binBps));
   const hl = state.points.map((p) => (state.unit === "usd" ? p.hlUsd : p.hlBps));
@@ -370,10 +407,11 @@ async function tick() {
   state.lastTickMs = started;
   setGlobalError("");
 
-  const [pythR, binR, hlR] = await Promise.allSettled([
+  const [pythR, binR, hlR, usdcR] = await Promise.allSettled([
     fetchPythXauUsd(),
     fetchBinanceMidAndFunding(),
     fetchHyperliquidMid(),
+    fetchBinanceUsdcUsdtMidSpot(),
   ]);
 
   // Pyth
@@ -406,7 +444,16 @@ async function tick() {
     state.hl.err = String(hlR.reason?.message || hlR.reason);
   }
 
-  // Append point (nulls create chart gaps)
+  // USDCUSDT spot
+  if (usdcR.status === "fulfilled") {
+    state.usdcusdt.mid = usdcR.value.mid;
+    state.usdcusdt.lastOkMs = started;
+    state.usdcusdt.err = "";
+  } else {
+    state.usdcusdt.err = String(usdcR.reason?.message || usdcR.reason);
+  }
+
+  // Append point for chart (nulls create gaps)
   const ref = state.pyth.price;
   state.points.push({
     t: started,
@@ -416,32 +463,44 @@ async function tick() {
     hlBps: basisBps(state.hl.mid, ref),
   });
 
-  // Errors to display
+  // Errors to display (non-blocking)
   const errs = [];
   if (state.pyth.err) errs.push(`PYTH: ${state.pyth.err}`);
   if (state.binance.err) errs.push(`BINANCE: ${state.binance.err}`);
   if (state.hl.err) errs.push(`HYPERLIQUID: ${state.hl.err}`);
+  if (state.usdcusdt.err) errs.push(`USDCUSDT: ${state.usdcusdt.err}`);
   setGlobalError(errs.join(" • "));
 
+  // Paint
   setGlobalStatus();
   paintStrip();
   paintTable();
+  paintConversion();
   syncChart();
 }
 
-let timer = null;
-function startTimer() {
-  if (timer) clearInterval(timer);
-  timer = setInterval(() => {
+// ---------- Timers ----------
+function startPollTimer() {
+  if (state.pollTimer) clearInterval(state.pollTimer);
+  state.pollTimer = setInterval(() => {
     tick().catch((e) => setGlobalError(`TICK: ${String(e?.message || e)}`));
   }, state.refreshMs);
+}
+
+function startUiTimer() {
+  if (state.uiTimer) clearInterval(state.uiTimer);
+  // Smooth "Xs ago" updates every second (no network)
+  state.uiTimer = setInterval(() => {
+    setGlobalStatus();
+    paintStrip();
+  }, 1000);
 }
 
 // ---------- Controls ----------
 function wireControls() {
   $("refreshSelect").addEventListener("change", (e) => {
     state.refreshMs = Number(e.target.value);
-    startTimer();
+    startPollTimer();
   });
 
   $("windowSelect").addEventListener("change", (e) => {
@@ -485,8 +544,9 @@ function wireControls() {
   try {
     wireControls();
     buildChart();
-    tick();
-    startTimer();
+    tick();           // immediate
+    startPollTimer(); // network polling
+    startUiTimer();   // smooth "Xs ago"
   } catch (e) {
     setGlobalError(`BOOT: ${String(e?.message || e)}`);
     console.error(e);
