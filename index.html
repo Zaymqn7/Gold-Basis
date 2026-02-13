@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gold Basis Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="container">
+      <h1>Gold Basis Dashboard</h1>
+      <p class="muted">Live updates every 5s • Reference: Pyth XAU/USD</p>
+    </header>
+
+    <main class="container grid">
+      <section class="card">
+        <h2>Pyth XAU/USD (reference)</h2>
+        <div class="row">
+          <div class="label">Price</div>
+          <div id="pythPrice" class="value">—</div>
+        </div>
+        <div class="row">
+          <div class="label">Publish time</div>
+          <div id="pythTime" class="value">—</div>
+        </div>
+        <div class="row">
+          <div class="label">Last refresh</div>
+          <div id="lastRefresh" class="value">—</div>
+        </div>
+        <div id="pythError" class="error"></div>
+      </section>
+
+      <section class="card">
+        <h2>Basis (vs Pyth)</h2>
+        <p class="muted">
+          Next step: we’ll add Binance XAU perp (price + funding) and compute basis here.
+        </p>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
