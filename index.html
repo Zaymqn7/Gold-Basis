@@ -85,7 +85,7 @@
 
       <div class="strip-item">
         <span id="dotHL" class="dot warn"></span>
-        <span class="strip-key">HYPERLIQUID GOLD</span>
+        <span class="strip-key">HYPERLIQUID GOLD-USDC</span>
         <span id="pxHL" class="strip-val mono">—</span>
         <span id="ageHL" class="strip-age mono">—</span>
       </div>
@@ -105,28 +105,45 @@
                 <th class="r">BASIS bps</th>
                 <th class="r">FUNDING</th>
                 <th class="r">NEXT FUND</th>
-                <th class="r">UPDATED</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><span class="pill">PERP</span> BINANCE</td>
+                <td>BINANCE</td>
                 <td id="tblBinanceMid" class="r mono">—</td>
-                <td id="tblBinanceBasisUsd" class="r mono">—</td>
-                <td id="tblBinanceBasisBps" class="r mono">—</td>
+                <td id="tblBinanceBasisUsd" class="r mono basis">—</td>
+                <td id="tblBinanceBasisBps" class="r mono basis">—</td>
                 <td id="tblBinanceFunding" class="r mono">—</td>
                 <td id="tblBinanceNextFunding" class="r mono">—</td>
-                <td id="tblBinanceAge" class="r mono">—</td>
               </tr>
 
               <tr>
-                <td><span class="pill spot">CLOB</span> HYPERLIQUID</td>
+                <td>HYPERLIQUID</td>
                 <td id="tblHLMid" class="r mono">—</td>
-                <td id="tblHLBasisUsd" class="r mono">—</td>
-                <td id="tblHLBasisBps" class="r mono">—</td>
+                <td id="tblHLBasisUsd" class="r mono basis">—</td>
+                <td id="tblHLBasisBps" class="r mono basis">—</td>
                 <td class="r mono">—</td>
                 <td class="r mono">—</td>
-                <td id="tblHLAge" class="r mono">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="subpanel-title">BINANCE USDT → USDC CONVERSION</div>
+        <div class="table-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th class="r">XAUUSDT (mid)</th>
+                <th class="r">USDCUSDT (mid spot)</th>
+                <th class="r">XAUUSDC (implied)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td id="convXauUsdt" class="r mono">—</td>
+                <td id="convUsdcUsdt" class="r mono">—</td>
+                <td id="convXauUsdc" class="r mono">—</td>
               </tr>
             </tbody>
           </table>
@@ -138,7 +155,7 @@
       </section>
 
       <section class="panel">
-        <div class="panel-title">BASIS CHART</div>
+        <div class="panel-title">BASIS CHART (vs PYTH)</div>
         <div class="chart-wrap">
           <canvas id="basisChart"></canvas>
         </div>
@@ -149,7 +166,7 @@
     </main>
 
     <footer class="footer mono">
-      Sources: Pyth Hermes, Binance Futures REST, Hyperliquid Info(allMids). Times in UTC/local browser rendering.
+      Sources: Pyth Hermes, Binance Futures REST, Binance Spot REST, Hyperliquid Info(allMids on flx).
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
