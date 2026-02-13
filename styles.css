@@ -6,9 +6,9 @@
   --text: #d9dee7;
   --muted: #8b93a7;
   --accent: #ffb000;    /* terminal amber */
-  --ok: #00d47b;
+  --ok: #00d47b;        /* bloomberg-ish green */
+  --bad: #ff3b3b;       /* bloomberg-ish red */
   --warn: #ffd24a;
-  --bad: #ff3b3b;
 
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
@@ -199,6 +199,17 @@ body{
   background: #07080b;
 }
 
+.subpanel-title{
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  color: var(--muted);
+  background: #07080b;
+}
+
 .table-wrap{ overflow-x: auto; }
 .tbl{
   width: 100%;
@@ -220,18 +231,17 @@ body{
 .tbl td{ color: var(--text); }
 .tbl td.r, .tbl th.r{ text-align: right; }
 
-.pill{
-  display:inline-block;
-  padding: 2px 6px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,176,0,0.35);
-  color: var(--accent);
-  margin-right: 8px;
-  font-size: 10px;
+/* Basis glow */
+.basis{
+  font-weight: 800;
 }
-.pill.spot{
-  border-color: rgba(0,212,123,0.35);
+.basis.pos{
   color: var(--ok);
+  text-shadow: 0 0 10px rgba(0,212,123,0.35);
+}
+.basis.neg{
+  color: var(--bad);
+  text-shadow: 0 0 10px rgba(255,59,59,0.35);
 }
 
 .foot{
