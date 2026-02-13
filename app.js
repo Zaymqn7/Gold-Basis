@@ -121,10 +121,58 @@ async function fetchBinanceMidAndFunding() {
 }
 
 async function fetchHyperliquidMid() {
-  const res = await fetch(HL_INFO, {
+  const res = await fetch("https://api.hyperliquid.xyz/info", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "allMids" }),
+    body: JSON.stringify({ type: "metaAndAssetCtxs" }),
+  });
+
+  if (!res.ok) throw new Error(`Hyperliquid HTTP ${res.status}`);
+
+  const data = await res.json();
+
+  const universe = data?.[0]?.universe;
+  const ctxs = data?.[1];
+
+  if (!Array.isArray(universe) || !Array.isArray(ctxs)) {
+    throw new Error("Hyperliquid: unexpected metaAndAssetCtxs response shape");
+  }
+
+  // We’ll match the “TradFi” GOLD market safely.
+  // Common names you might see: "flx:GOLD", "GOLD", sometimes "XAU".
+  const targets = ["flx:GOLD", "GOLD", "GOLD-USDC", "XAU"];
+
+  // 1) try exact match first
+  let idx = -1;
+  for (const t of targets) {
+    idx = universe.findIndex((u) => (u?.name || "").toUpperCase() === t.toUpperCase());
+    if (idx !== -1) break;
+  }
+
+  // 2) fallback: contains match
+  if (idx === -1) {
+    idx = universe.findIndex((u) => (u?.name || "").toUpperCase().includes("GOLD"));
+  }
+
+  if (idx === -1) {
+    // Helpful error: show any universe names containing "GOLD"
+    const goldLike = universe
+      .map((u) => u?.name)
+      .filter((n) => typeof n === "string" && n.toUpperCase().includes("GOLD"))
+      .slice(0, 20);
+
+    throw new Error(`Hyperliquid: GOLD market not found. GOLD-like names: ${goldLike.join(", ")}`);
+  }
+
+  const ctx = ctxs[idx];
+  const mid = Number(ctx?.midPx ?? ctx?.markPx);
+
+  if (!Number.isFinite(mid)) {
+    throw new Error(`Hyperliquid: midPx not finite for ${universe[idx]?.name}`);
+  }
+
+  return { mid };
+}),
   });
 
   if (!res.ok) throw new Error(`Hyperliquid HTTP ${res.status}`);
