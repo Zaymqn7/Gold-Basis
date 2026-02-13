@@ -3,41 +3,156 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gold Basis Dashboard</title>
+    <title>GOLD BASIS MONITOR</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header class="container">
-      <h1>Gold Basis Dashboard</h1>
-      <p class="muted">Live updates every 5s • Reference: Pyth XAU/USD</p>
+    <header class="topbar">
+      <div class="title">
+        <div class="title-main">GOLD BASIS MONITOR</div>
+        <div class="title-sub">PYTH XAU/USD reference • Mid prices • Live polling</div>
+      </div>
+
+      <div class="topbar-right">
+        <div class="kv">
+          <div class="k">STATUS</div>
+          <div id="globalStatus" class="v badge ok">LIVE</div>
+        </div>
+        <div class="kv">
+          <div class="k">UPDATED</div>
+          <div id="globalUpdated" class="v mono">—</div>
+        </div>
+      </div>
     </header>
 
-    <main class="container grid">
-      <section class="card">
-        <h2>Pyth XAU/USD (reference)</h2>
-        <div class="row">
-          <div class="label">Price</div>
-          <div id="pythPrice" class="value">—</div>
+    <section class="controls">
+      <div class="control-group">
+        <label class="label">Refresh</label>
+        <select id="refreshSelect" class="select">
+          <option value="1000">1s</option>
+          <option value="2000">2s</option>
+          <option value="5000" selected>5s</option>
+          <option value="10000">10s</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label class="label">Window</label>
+        <select id="windowSelect" class="select">
+          <option value="900000">15m</option>
+          <option value="3600000" selected>1h</option>
+          <option value="21600000">6h</option>
+          <option value="86400000">24h</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label class="label">Chart units</label>
+        <div class="toggle">
+          <button id="unitUsdBtn" class="btn btn-on">$</button>
+          <button id="unitBpsBtn" class="btn">bps</button>
         </div>
-        <div class="row">
-          <div class="label">Publish time</div>
-          <div id="pythTime" class="value">—</div>
+      </div>
+
+      <div class="control-group">
+        <label class="label">Control</label>
+        <div class="toggle">
+          <button id="pauseBtn" class="btn">PAUSE</button>
+          <button id="resumeBtn" class="btn" disabled>RESUME</button>
         </div>
-        <div class="row">
-          <div class="label">Last refresh</div>
-          <div id="lastRefresh" class="value">—</div>
+      </div>
+
+      <div class="control-group grow">
+        <div id="globalError" class="error"></div>
+      </div>
+    </section>
+
+    <section class="strip">
+      <div class="strip-item">
+        <span id="dotPyth" class="dot ok"></span>
+        <span class="strip-key">PYTH XAU/USD</span>
+        <span id="pxPyth" class="strip-val mono">—</span>
+        <span id="agePyth" class="strip-age mono">—</span>
+      </div>
+
+      <div class="strip-item">
+        <span id="dotBinance" class="dot warn"></span>
+        <span class="strip-key">BINANCE XAUUSDT PERP</span>
+        <span id="pxBinance" class="strip-val mono">—</span>
+        <span id="ageBinance" class="strip-age mono">—</span>
+        <span id="fundBinance" class="strip-note mono">funding: —</span>
+      </div>
+
+      <div class="strip-item">
+        <span id="dotHL" class="dot warn"></span>
+        <span class="strip-key">HYPERLIQUID GOLD</span>
+        <span id="pxHL" class="strip-val mono">—</span>
+        <span id="ageHL" class="strip-age mono">—</span>
+      </div>
+    </section>
+
+    <main class="main">
+      <section class="panel">
+        <div class="panel-title">BASIS TABLE (vs PYTH)</div>
+
+        <div class="table-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>VENUE</th>
+                <th class="r">MID</th>
+                <th class="r">BASIS $</th>
+                <th class="r">BASIS bps</th>
+                <th class="r">FUNDING</th>
+                <th class="r">NEXT FUND</th>
+                <th class="r">UPDATED</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="pill">PERP</span> BINANCE</td>
+                <td id="tblBinanceMid" class="r mono">—</td>
+                <td id="tblBinanceBasisUsd" class="r mono">—</td>
+                <td id="tblBinanceBasisBps" class="r mono">—</td>
+                <td id="tblBinanceFunding" class="r mono">—</td>
+                <td id="tblBinanceNextFunding" class="r mono">—</td>
+                <td id="tblBinanceAge" class="r mono">—</td>
+              </tr>
+
+              <tr>
+                <td><span class="pill spot">CLOB</span> HYPERLIQUID</td>
+                <td id="tblHLMid" class="r mono">—</td>
+                <td id="tblHLBasisUsd" class="r mono">—</td>
+                <td id="tblHLBasisBps" class="r mono">—</td>
+                <td class="r mono">—</td>
+                <td class="r mono">—</td>
+                <td id="tblHLAge" class="r mono">—</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <div id="pythError" class="error"></div>
+
+        <div class="foot mono">
+          Ref: <span id="refPyth" class="mono">—</span> • Publish: <span id="refPythTime" class="mono">—</span>
+        </div>
       </section>
 
-      <section class="card">
-        <h2>Basis (vs Pyth)</h2>
-        <p class="muted">
-          Next step: we’ll add Binance XAU perp (price + funding) and compute basis here.
-        </p>
+      <section class="panel">
+        <div class="panel-title">BASIS CHART</div>
+        <div class="chart-wrap">
+          <canvas id="basisChart"></canvas>
+        </div>
+        <div class="foot mono">
+          Default: $ basis • Toggle to bps • Window controls prune history
+        </div>
       </section>
     </main>
 
+    <footer class="footer mono">
+      Sources: Pyth Hermes, Binance Futures REST, Hyperliquid Info(allMids). Times in UTC/local browser rendering.
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
