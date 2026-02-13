@@ -1,13 +1,9 @@
-// GOLD BASIS MONITOR (no Chart.js time adapter needed)
-//
-// Pyth = reference (oracle price)
-// Binance = true mid from bid/ask
-// Hyperliquid = mid from allMids
+// app.js — GOLD BASIS MONITOR (Pyth + Binance + Hyperliquid)
+// Uses Chart.js (already included in index.html) with a simple category x-axis (no time adapter).
 
 // ---------- Config ----------
 const PYTH_XAU_USD_ID =
   "0x765d2ba906dbc32ca17cc11f5310a89e9ee1f6420508c63861f2f8ba4ee34bb2";
-
 const PYTH_LATEST_URL = "https://hermes.pyth.network/v2/updates/price/latest";
 
 // Binance USD-M Futures
@@ -18,7 +14,6 @@ const BINANCE_PREMIUM_INDEX =
 
 // Hyperliquid
 const HL_INFO = "https://api.hyperliquid.xyz/info";
-const HL_ASSET = "GOLD"; // if HL uses a different key, we attempt to auto-find GOLD-ish keys
 
 // Staleness thresholds (ms)
 const STALE_MS = 30_000;
@@ -71,7 +66,6 @@ function statusFromAge(lastOkMs) {
 
 function timeLabel(ms) {
   const d = new Date(ms);
-  // HH:MM:SS in local time
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
   const ss = String(d.getSeconds()).padStart(2, "0");
@@ -120,9 +114,13 @@ async function fetchBinanceMidAndFunding() {
   return { mid, lastFundingRate, nextFundingTimeMs };
 }
 
+// Hyperliquid: IMPORTANT
+// Your GOLD-USDC market lives on the "flx" (TradFi) perp dex (UI shows flx:GOLD).
+// allMids defaults to the *main* dex unless you pass `dex`.
+// We fetch perpDexs -> pick flx -> then fetch allMids for that dex and extract GOLD.
 async function fetchHyperliquidMid() {
-  // 1) Get perp dex list so we can find the TradFi / flx dex
-  const dexsRes = await fetch("https://api.hyperliquid.xyz/info", {
+  // 1) Find the correct perp dex (prefer flx)
+  const dexsRes = await fetch(HL_INFO, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ type: "perpDexs" }),
@@ -134,14 +132,13 @@ async function fetchHyperliquidMid() {
     (x) => x && typeof x === "object" && x.name
   );
 
-  // Prefer flx (your UI shows flx:GOLD). Fallbacks included.
   const dexName =
     dexObjs.find((d) => String(d.name).toLowerCase() === "flx")?.name ||
     dexObjs.find((d) => String(d.name).toLowerCase().includes("trad"))?.name ||
     "flx";
 
-  // 2) Pull mids for that specific perp dex
-  const midsRes = await fetch("https://api.hyperliquid.xyz/info", {
+  // 2) Fetch mids for that dex
+  const midsRes = await fetch(HL_INFO, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ type: "allMids", dex: dexName }),
@@ -150,15 +147,16 @@ async function fetchHyperliquidMid() {
 
   const mids = await midsRes.json();
 
-  // 3) Find the GOLD market key in that dex's mids
-  const candidates = ["GOLD", "flx:GOLD", "GOLD-USDC"];
+  // 3) Extract GOLD mid
   let px = null;
 
+  // Try common keys
+  const candidates = ["GOLD", "flx:GOLD", "GOLD-USDC"];
   for (const k of candidates) {
     if (mids && mids[k] != null) { px = mids[k]; break; }
   }
 
-  // fallback: any key containing "GOLD"
+  // Fallback: any key containing GOLD
   if (px == null && mids && typeof mids === "object") {
     const hit = Object.keys(mids).find((k) => k.toUpperCase().includes("GOLD"));
     if (hit) px = mids[hit];
@@ -168,80 +166,13 @@ async function fetchHyperliquidMid() {
   if (!Number.isFinite(mid)) {
     const goldKeys =
       mids && typeof mids === "object"
-        ? Object.keys(mids).filter((k) => k.toUpperCase().includes("GOLD")).slice(0, 20)
+        ? Object.keys(mids).filter((k) => k.toUpperCase().includes("GOLD")).slice(0, 30)
         : [];
     throw new Error(
       `Hyperliquid: GOLD not found on dex="${dexName}". GOLD-like keys: ${goldKeys.join(", ")}`
     );
   }
 
-  return { mid };
-}
-);
-
-  if (!res.ok) throw new Error(`Hyperliquid HTTP ${res.status}`);
-
-  const data = await res.json();
-
-  const universe = data?.[0]?.universe;
-  const ctxs = data?.[1];
-
-  if (!Array.isArray(universe) || !Array.isArray(ctxs)) {
-    throw new Error("Hyperliquid: unexpected metaAndAssetCtxs response shape");
-  }
-
-  // We’ll match the “TradFi” GOLD market safely.
-  // Common names you might see: "flx:GOLD", "GOLD", sometimes "XAU".
-  const targets = ["flx:GOLD", "GOLD", "GOLD-USDC", "XAU"];
-
-  // 1) try exact match first
-  let idx = -1;
-  for (const t of targets) {
-    idx = universe.findIndex((u) => (u?.name || "").toUpperCase() === t.toUpperCase());
-    if (idx !== -1) break;
-  }
-
-  // 2) fallback: contains match
-  if (idx === -1) {
-    idx = universe.findIndex((u) => (u?.name || "").toUpperCase().includes("GOLD"));
-  }
-
-  if (idx === -1) {
-    // Helpful error: show any universe names containing "GOLD"
-    const goldLike = universe
-      .map((u) => u?.name)
-      .filter((n) => typeof n === "string" && n.toUpperCase().includes("GOLD"))
-      .slice(0, 20);
-
-    throw new Error(`Hyperliquid: GOLD market not found. GOLD-like names: ${goldLike.join(", ")}`);
-  }
-
-  const ctx = ctxs[idx];
-  const mid = Number(ctx?.midPx ?? ctx?.markPx);
-
-  if (!Number.isFinite(mid)) {
-    throw new Error(`Hyperliquid: midPx not finite for ${universe[idx]?.name}`);
-  }
-
-  return { mid };
-}),
-  });
-
-  if (!res.ok) throw new Error(`Hyperliquid HTTP ${res.status}`);
-  const data = await res.json();
-
-  let px = data?.[HL_ASSET];
-
-  if (px == null) {
-    const keys = Object.keys(data || {});
-    const hit =
-      keys.find((k) => k.toUpperCase() === HL_ASSET.toUpperCase()) ||
-      keys.find((k) => k.toUpperCase().includes("GOLD"));
-    if (hit) px = data[hit];
-  }
-
-  const mid = Number(px);
-  if (!Number.isFinite(mid)) throw new Error(`Hyperliquid mid missing for ${HL_ASSET}`);
   return { mid };
 }
 
@@ -268,8 +199,7 @@ const state = {
   binance: { mid: NaN, lastFundingRate: NaN, nextFundingTimeMs: 0, lastOkMs: 0, err: "" },
   hl: { mid: NaN, lastOkMs: 0, err: "" },
 
-  // unified time series points
-  // { t, binUsd, binBps, hlUsd, hlBps }
+  // points: { t, binUsd, binBps, hlUsd, hlBps }
   points: [],
 
   chart: null,
@@ -294,7 +224,10 @@ function setGlobalStatus() {
     let text = "LIVE";
     let cls = "ok";
 
-    if (!pOk) { text = state.pyth.lastOkMs ? "STALE" : "ERROR"; cls = state.pyth.lastOkMs ? "warn" : "bad"; }
+    if (!pOk) {
+      text = state.pyth.lastOkMs ? "STALE" : "ERROR";
+      cls = state.pyth.lastOkMs ? "warn" : "bad";
+    }
     if (pOk && (!bOk || !hOk)) { text = "PARTIAL"; cls = "warn"; }
 
     badge.textContent = text;
@@ -373,7 +306,6 @@ function buildChart() {
   if (!canvas || typeof Chart === "undefined") return;
 
   const ctx = canvas.getContext("2d");
-
   state.chart = new Chart(ctx, {
     type: "line",
     data: {
@@ -474,22 +406,17 @@ async function tick() {
     state.hl.err = String(hlR.reason?.message || hlR.reason);
   }
 
-  // Append unified point (nulls create chart gaps)
+  // Append point (nulls create chart gaps)
   const ref = state.pyth.price;
-  const binUsd = basisUsd(state.binance.mid, ref);
-  const binBps = basisBps(state.binance.mid, ref);
-  const hlUsd = basisUsd(state.hl.mid, ref);
-  const hlBps = basisBps(state.hl.mid, ref);
-
   state.points.push({
     t: started,
-    binUsd,
-    binBps,
-    hlUsd,
-    hlBps,
+    binUsd: basisUsd(state.binance.mid, ref),
+    binBps: basisBps(state.binance.mid, ref),
+    hlUsd: basisUsd(state.hl.mid, ref),
+    hlBps: basisBps(state.hl.mid, ref),
   });
 
-  // Errors to display (non-blocking)
+  // Errors to display
   const errs = [];
   if (state.pyth.err) errs.push(`PYTH: ${state.pyth.err}`);
   if (state.binance.err) errs.push(`BINANCE: ${state.binance.err}`);
