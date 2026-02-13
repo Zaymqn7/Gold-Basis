@@ -10,7 +10,6 @@
     <header class="topbar">
       <div class="title">
         <div class="title-main">GOLD BASIS MONITOR</div>
-        <div class="title-sub">PYTH XAU/USD reference • Mid prices • Live polling</div>
       </div>
 
       <div class="topbar-right">
@@ -77,7 +76,7 @@
 
       <div class="strip-item">
         <span id="dotBinance" class="dot warn"></span>
-        <span class="strip-key">BINANCE XAUUSDT PERP</span>
+        <span class="strip-key">BINANCE XAUUSDT</span>
         <span id="pxBinance" class="strip-val mono">—</span>
         <span id="ageBinance" class="strip-age mono">—</span>
         <span id="fundBinance" class="strip-note mono">funding: —</span>
@@ -88,6 +87,13 @@
         <span class="strip-key">HYPERLIQUID GOLD-USDC</span>
         <span id="pxHL" class="strip-val mono">—</span>
         <span id="ageHL" class="strip-age mono">—</span>
+      </div>
+
+      <div class="strip-item">
+        <span id="dotMeteora" class="dot warn"></span>
+        <span class="strip-key">METEORA DLMM</span>
+        <span id="pxMeteora" class="strip-val mono">—</span>
+        <span id="ageMeteora" class="strip-age mono">—</span>
       </div>
     </section>
 
@@ -125,6 +131,15 @@
                 <td class="r mono">—</td>
                 <td class="r mono">—</td>
               </tr>
+
+              <tr>
+                <td>METEORA</td>
+                <td id="tblMeteoraMid" class="r mono">—</td>
+                <td id="tblMeteoraBasisUsd" class="r mono basis">—</td>
+                <td id="tblMeteoraBasisBps" class="r mono basis">—</td>
+                <td class="r mono">—</td>
+                <td class="r mono">—</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -159,15 +174,8 @@
         <div class="chart-wrap">
           <canvas id="basisChart"></canvas>
         </div>
-        <div class="foot mono">
-          Default: $ basis • Toggle to bps • Window controls prune history
-        </div>
       </section>
     </main>
-
-    <footer class="footer mono">
-      Sources: Pyth Hermes, Binance Futures REST, Binance Spot REST, Hyperliquid Info(allMids on flx).
-    </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="./app.js"></script>
