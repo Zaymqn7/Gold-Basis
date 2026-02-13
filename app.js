@@ -121,11 +121,63 @@ async function fetchBinanceMidAndFunding() {
 }
 
 async function fetchHyperliquidMid() {
-  const res = await fetch("https://api.hyperliquid.xyz/info", {
+  // 1) Get perp dex list so we can find the TradFi / flx dex
+  const dexsRes = await fetch("https://api.hyperliquid.xyz/info", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "metaAndAssetCtxs" }),
+    body: JSON.stringify({ type: "perpDexs" }),
   });
+  if (!dexsRes.ok) throw new Error(`Hyperliquid perpDexs HTTP ${dexsRes.status}`);
+
+  const dexs = await dexsRes.json();
+  const dexObjs = (Array.isArray(dexs) ? dexs : []).filter(
+    (x) => x && typeof x === "object" && x.name
+  );
+
+  // Prefer flx (your UI shows flx:GOLD). Fallbacks included.
+  const dexName =
+    dexObjs.find((d) => String(d.name).toLowerCase() === "flx")?.name ||
+    dexObjs.find((d) => String(d.name).toLowerCase().includes("trad"))?.name ||
+    "flx";
+
+  // 2) Pull mids for that specific perp dex
+  const midsRes = await fetch("https://api.hyperliquid.xyz/info", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "allMids", dex: dexName }),
+  });
+  if (!midsRes.ok) throw new Error(`Hyperliquid allMids HTTP ${midsRes.status}`);
+
+  const mids = await midsRes.json();
+
+  // 3) Find the GOLD market key in that dex's mids
+  const candidates = ["GOLD", "flx:GOLD", "GOLD-USDC"];
+  let px = null;
+
+  for (const k of candidates) {
+    if (mids && mids[k] != null) { px = mids[k]; break; }
+  }
+
+  // fallback: any key containing "GOLD"
+  if (px == null && mids && typeof mids === "object") {
+    const hit = Object.keys(mids).find((k) => k.toUpperCase().includes("GOLD"));
+    if (hit) px = mids[hit];
+  }
+
+  const mid = Number(px);
+  if (!Number.isFinite(mid)) {
+    const goldKeys =
+      mids && typeof mids === "object"
+        ? Object.keys(mids).filter((k) => k.toUpperCase().includes("GOLD")).slice(0, 20)
+        : [];
+    throw new Error(
+      `Hyperliquid: GOLD not found on dex="${dexName}". GOLD-like keys: ${goldKeys.join(", ")}`
+    );
+  }
+
+  return { mid };
+}
+);
 
   if (!res.ok) throw new Error(`Hyperliquid HTTP ${res.status}`);
 
