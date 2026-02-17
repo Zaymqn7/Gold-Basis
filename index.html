@@ -1,183 +1,270 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GOLD BASIS MONITOR</title>
-    <link rel="stylesheet" href="./styles.css" />
-  </head>
-  <body>
-    <header class="topbar">
-      <div class="title">
-        <div class="title-main">GOLD BASIS MONITOR</div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GOLD BASIS TERMINAL</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <div class="term">
+
+    <!-- TOP TERMINAL BARS -->
+    <header class="top">
+      <div class="bar bar-menu">
+        <div class="menu-left mono">
+          <span class="amber">GOLD BASIS</span>
+          <span class="sep">|</span>
+          <span class="menu">BASIS</span>
+          <span class="sep">|</span>
+          <span class="menu">SPOT</span>
+          <span class="sep">|</span>
+          <span class="menu">FUNDING</span>
+          <span class="sep">|</span>
+          <span class="menu">DIAG</span>
+          <span class="sep">|</span>
+          <span class="menu">HELP</span>
+          <span class="sep">|</span>
+          <span class="muted">Cmd+R</span>
+        </div>
+        <div class="menu-right mono">
+          <span class="muted">UTC</span>
+          <span id="topUtc" class="val">—</span>
+        </div>
       </div>
 
-      <div class="topbar-right">
-        <div class="kv">
-          <div class="k">STATUS</div>
-          <div id="globalStatus" class="v badge ok">LIVE</div>
+      <div class="bar bar-quote">
+        <div class="quote-left mono">
+          <span class="cyan">XAUUSD</span>
+          <span id="topPythPx" class="val">—</span>
+          <span id="topPythChg" class="chg">—</span>
+          <span id="topPythChgPct" class="chg">—</span>
         </div>
-        <div class="kv">
-          <div class="k">UPDATED</div>
-          <div id="globalUpdated" class="v mono">—</div>
+
+        <div class="quote-right mono">
+          <span class="muted">REFR</span>
+          <select id="refreshSelect" class="sel">
+            <option value="1000">1s</option>
+            <option value="2000">2s</option>
+            <option value="5000" selected>5s</option>
+            <option value="10000">10s</option>
+          </select>
+
+          <span class="muted">WIN</span>
+          <select id="windowSelect" class="sel">
+            <option value="900000">15m</option>
+            <option value="3600000" selected>1h</option>
+            <option value="21600000">6h</option>
+            <option value="86400000">24h</option>
+          </select>
+
+          <span class="muted">UNIT</span>
+          <button id="unitUsdBtn" class="kbtn on">$</button>
+          <button id="unitBpsBtn" class="kbtn">bps</button>
+
+          <span class="muted">UPD</span>
+          <span id="globalUpdated" class="val">—</span>
+
+          <span class="muted">STAT</span>
+          <span id="globalStatus" class="badge ok">LIVE</span>
+
+          <button id="pauseBtn" class="kbtn">PAUSE</button>
+          <button id="resumeBtn" class="kbtn" disabled>RESUME</button>
         </div>
+      </div>
+
+      <div class="bar bar-cmd">
+        <div class="cmd mono">
+          <span class="amber">CMD&gt;</span>
+          <span class="muted">Gold basis monitor • live polling • time-series</span>
+        </div>
+        <div id="globalError" class="err mono"></div>
       </div>
     </header>
 
-    <section class="controls">
-      <div class="control-group">
-        <label class="label">Refresh</label>
-        <select id="refreshSelect" class="select">
-          <option value="1000">1s</option>
-          <option value="2000">2s</option>
-          <option value="5000" selected>5s</option>
-          <option value="10000">10s</option>
-        </select>
-      </div>
-
-      <div class="control-group">
-        <label class="label">Window</label>
-        <select id="windowSelect" class="select">
-          <option value="900000">15m</option>
-          <option value="3600000" selected>1h</option>
-          <option value="21600000">6h</option>
-          <option value="86400000">24h</option>
-        </select>
-      </div>
-
-      <div class="control-group">
-        <label class="label">Chart units</label>
-        <div class="toggle">
-          <button id="unitUsdBtn" class="btn btn-on">$</button>
-          <button id="unitBpsBtn" class="btn">bps</button>
-        </div>
-      </div>
-
-      <div class="control-group">
-        <label class="label">Control</label>
-        <div class="toggle">
-          <button id="pauseBtn" class="btn">PAUSE</button>
-          <button id="resumeBtn" class="btn" disabled>RESUME</button>
-        </div>
-      </div>
-
-      <div class="control-group grow">
-        <div id="globalError" class="error"></div>
-      </div>
-    </section>
-
-    <section class="strip">
-      <div class="strip-item">
-        <span id="dotPyth" class="dot ok"></span>
-        <span class="strip-key">PYTH XAU/USD</span>
-        <span id="pxPyth" class="strip-val mono">—</span>
-        <span id="agePyth" class="strip-age mono">—</span>
-      </div>
-
-      <div class="strip-item">
-        <span id="dotBinance" class="dot warn"></span>
-        <span class="strip-key">BINANCE XAUUSDT</span>
-        <span id="pxBinance" class="strip-val mono">—</span>
-        <span id="ageBinance" class="strip-age mono">—</span>
-        <span id="fundBinance" class="strip-note mono">funding: —</span>
-      </div>
-
-      <div class="strip-item">
-        <span id="dotHL" class="dot warn"></span>
-        <span class="strip-key">HYPERLIQUID GOLD-USDC</span>
-        <span id="pxHL" class="strip-val mono">—</span>
-        <span id="ageHL" class="strip-age mono">—</span>
-      </div>
-
-      <div class="strip-item">
-        <span id="dotMeteora" class="dot warn"></span>
-        <span class="strip-key">METEORA DLMM</span>
-        <span id="pxMeteora" class="strip-val mono">—</span>
-        <span id="ageMeteora" class="strip-age mono">—</span>
-      </div>
-    </section>
-
-    <main class="main">
+    <!-- MAIN GRID -->
+    <main class="grid">
+      <!-- SNAPSHOT PANEL -->
       <section class="panel">
-        <div class="panel-title">BASIS TABLE (vs PYTH)</div>
+        <div class="phdr mono">[SNAPSHOT] LATEST (vs PYTH)</div>
 
-        <div class="table-wrap">
-          <table class="tbl">
+        <div class="pbody">
+          <table class="tbl mono">
             <thead>
               <tr>
                 <th>VENUE</th>
                 <th class="r">MID</th>
                 <th class="r">BASIS $</th>
                 <th class="r">BASIS bps</th>
-                <th class="r">FUNDING</th>
-                <th class="r">NEXT FUND</th>
+                <th class="r">FUND</th>
+                <th class="r">NEXT</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>BINANCE</td>
-                <td id="tblBinanceMid" class="r mono">—</td>
-                <td id="tblBinanceBasisUsd" class="r mono basis">—</td>
-                <td id="tblBinanceBasisBps" class="r mono basis">—</td>
-                <td id="tblBinanceFunding" class="r mono">—</td>
-                <td id="tblBinanceNextFunding" class="r mono">—</td>
+                <td id="tblBinanceMid" class="r">—</td>
+                <td id="tblBinanceBasisUsd" class="r basis">—</td>
+                <td id="tblBinanceBasisBps" class="r basis">—</td>
+                <td id="tblBinanceFunding" class="r">—</td>
+                <td id="tblBinanceNextFunding" class="r">—</td>
               </tr>
-
               <tr>
                 <td>HYPERLIQUID</td>
-                <td id="tblHLMid" class="r mono">—</td>
-                <td id="tblHLBasisUsd" class="r mono basis">—</td>
-                <td id="tblHLBasisBps" class="r mono basis">—</td>
-                <td class="r mono">—</td>
-                <td class="r mono">—</td>
+                <td id="tblHLMid" class="r">—</td>
+                <td id="tblHLBasisUsd" class="r basis">—</td>
+                <td id="tblHLBasisBps" class="r basis">—</td>
+                <td class="r muted">—</td>
+                <td class="r muted">—</td>
               </tr>
-
               <tr>
                 <td>METEORA</td>
-                <td id="tblMeteoraMid" class="r mono">—</td>
-                <td id="tblMeteoraBasisUsd" class="r mono basis">—</td>
-                <td id="tblMeteoraBasisBps" class="r mono basis">—</td>
-                <td class="r mono">—</td>
-                <td class="r mono">—</td>
+                <td id="tblMeteoraMid" class="r">—</td>
+                <td id="tblMeteoraBasisUsd" class="r basis">—</td>
+                <td id="tblMeteoraBasisBps" class="r basis">—</td>
+                <td class="r muted">—</td>
+                <td class="r muted">—</td>
               </tr>
             </tbody>
           </table>
-        </div>
 
-        <div class="subpanel-title">BINANCE USDT → USDC CONVERSION</div>
-        <div class="table-wrap">
-          <table class="tbl">
+          <div class="subhdr mono">[DISLOCATIONS] METEORA vs VENUES</div>
+          <table class="tbl mono">
             <thead>
               <tr>
-                <th class="r">XAUUSDT (mid)</th>
-                <th class="r">USDCUSDT (mid spot)</th>
-                <th class="r">XAUUSDC (implied)</th>
+                <th>PAIR</th>
+                <th class="r">Δ $</th>
+                <th class="r">Δ bps</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td id="convXauUsdt" class="r mono">—</td>
-                <td id="convUsdcUsdt" class="r mono">—</td>
-                <td id="convXauUsdc" class="r mono">—</td>
+                <td>METEORA − BINANCE</td>
+                <td id="disMetBinUsd" class="r basis">—</td>
+                <td id="disMetBinBps" class="r basis">—</td>
+              </tr>
+              <tr>
+                <td>METEORA − HYPERLIQUID</td>
+                <td id="disMetHlUsd" class="r basis">—</td>
+                <td id="disMetHlBps" class="r basis">—</td>
               </tr>
             </tbody>
           </table>
-        </div>
 
-        <div class="foot mono">
-          Ref: <span id="refPyth" class="mono">—</span> • Publish: <span id="refPythTime" class="mono">—</span>
+          <div class="subhdr mono">[CONVERSION] BINANCE XAUUSDT → XAUUSDC</div>
+          <table class="tbl mono">
+            <thead>
+              <tr>
+                <th class="r">XAUUSDT mid</th>
+                <th class="r">USDCUSDT mid</th>
+                <th class="r">XAUUSDC implied</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td id="convXauUsdt" class="r">—</td>
+                <td id="convUsdcUsdt" class="r">—</td>
+                <td id="convXauUsdc" class="r">—</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="foot mono">
+            REF (PYTH): <span id="refPyth">—</span>
+            <span class="sep">|</span>
+            PUBLISH: <span id="refPythTime">—</span>
+          </div>
         </div>
       </section>
 
+      <!-- BASIS CHART -->
       <section class="panel">
-        <div class="panel-title">BASIS CHART (vs PYTH)</div>
-        <div class="chart-wrap">
+        <div class="phdr mono">[BASIS] vs PYTH (CHART)</div>
+        <div class="pchart">
           <canvas id="basisChart"></canvas>
+        </div>
+      </section>
+
+      <!-- PYTH SPOT CHART -->
+      <section class="panel">
+        <div class="phdr mono">[REF] PYTH XAUUSD (SPOT)</div>
+        <div class="pchart">
+          <canvas id="pythChart"></canvas>
+        </div>
+      </section>
+
+      <!-- FUNDING APY CHART -->
+      <section class="panel">
+        <div class="phdr mono">[FUNDING] BINANCE ANNUALIZED APY</div>
+        <div class="pchart">
+          <canvas id="fundingChart"></canvas>
+        </div>
+      </section>
+
+      <!-- NETWORK DIAGNOSTICS (full width) -->
+      <section class="panel span2">
+        <div class="phdr mono">[DIAG] NETWORK / FEED HEALTH</div>
+        <div class="pbody">
+          <table class="tbl mono">
+            <thead>
+              <tr>
+                <th>FEED</th>
+                <th class="r">STATUS</th>
+                <th class="r">AGE</th>
+                <th class="r">LAT</th>
+                <th>LAST ERROR</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>PYTH</td>
+                <td id="diagPythStatus" class="r">—</td>
+                <td id="diagPythAge" class="r">—</td>
+                <td id="diagPythLat" class="r">—</td>
+                <td id="diagPythErr" class="muted">—</td>
+              </tr>
+              <tr>
+                <td>BINANCE FUTURES</td>
+                <td id="diagBinFStatus" class="r">—</td>
+                <td id="diagBinFAge" class="r">—</td>
+                <td id="diagBinFLat" class="r">—</td>
+                <td id="diagBinFErr" class="muted">—</td>
+              </tr>
+              <tr>
+                <td>BINANCE SPOT (USDCUSDT)</td>
+                <td id="diagBinSStatus" class="r">—</td>
+                <td id="diagBinSAge" class="r">—</td>
+                <td id="diagBinSLat" class="r">—</td>
+                <td id="diagBinSErr" class="muted">—</td>
+              </tr>
+              <tr>
+                <td>HYPERLIQUID</td>
+                <td id="diagHlStatus" class="r">—</td>
+                <td id="diagHlAge" class="r">—</td>
+                <td id="diagHlLat" class="r">—</td>
+                <td id="diagHlErr" class="muted">—</td>
+              </tr>
+              <tr>
+                <td>METEORA</td>
+                <td id="diagMetStatus" class="r">—</td>
+                <td id="diagMetAge" class="r">—</td>
+                <td id="diagMetLat" class="r">—</td>
+                <td id="diagMetErr" class="muted">—</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="foot mono muted">
+            Tip: If a colleague sees “Failed to fetch”, it’s almost always network/CORS policy. Raise refresh to 5–10s.
+          </div>
         </div>
       </section>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="./app.js"></script>
-  </body>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="./app.js"></script>
+</body>
 </html>
