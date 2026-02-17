@@ -1,270 +1,327 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GOLD BASIS TERMINAL</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GOLD BASIS &lt;GO&gt;</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
-  <div class="term">
-
-    <!-- TOP TERMINAL BARS -->
-    <header class="top">
-      <div class="bar bar-menu">
-        <div class="menu-left mono">
-          <span class="amber">GOLD BASIS</span>
-          <span class="sep">|</span>
-          <span class="menu">BASIS</span>
-          <span class="sep">|</span>
-          <span class="menu">SPOT</span>
-          <span class="sep">|</span>
-          <span class="menu">FUNDING</span>
-          <span class="sep">|</span>
-          <span class="menu">DIAG</span>
-          <span class="sep">|</span>
-          <span class="menu">HELP</span>
-          <span class="sep">|</span>
-          <span class="muted">Cmd+R</span>
-        </div>
-        <div class="menu-right mono">
-          <span class="muted">UTC</span>
-          <span id="topUtc" class="val">—</span>
-        </div>
+  <!-- Bloomberg Terminal Container -->
+  <div class="bloomberg-terminal">
+    
+    <!-- Top Orange Header Bar -->
+    <header class="bb-top-bar">
+      <div class="bb-top-left">
+        <span class="bb-logo">BLOOMBERG</span>
       </div>
-
-      <div class="bar bar-quote">
-        <div class="quote-left mono">
-          <span class="cyan">XAUUSD</span>
-          <span id="topPythPx" class="val">—</span>
-          <span id="topPythChg" class="chg">—</span>
-          <span id="topPythChgPct" class="chg">—</span>
-        </div>
-
-        <div class="quote-right mono">
-          <span class="muted">REFR</span>
-          <select id="refreshSelect" class="sel">
-            <option value="1000">1s</option>
-            <option value="2000">2s</option>
-            <option value="5000" selected>5s</option>
-            <option value="10000">10s</option>
-          </select>
-
-          <span class="muted">WIN</span>
-          <select id="windowSelect" class="sel">
-            <option value="900000">15m</option>
-            <option value="3600000" selected>1h</option>
-            <option value="21600000">6h</option>
-            <option value="86400000">24h</option>
-          </select>
-
-          <span class="muted">UNIT</span>
-          <button id="unitUsdBtn" class="kbtn on">$</button>
-          <button id="unitBpsBtn" class="kbtn">bps</button>
-
-          <span class="muted">UPD</span>
-          <span id="globalUpdated" class="val">—</span>
-
-          <span class="muted">STAT</span>
-          <span id="globalStatus" class="badge ok">LIVE</span>
-
-          <button id="pauseBtn" class="kbtn">PAUSE</button>
-          <button id="resumeBtn" class="kbtn" disabled>RESUME</button>
-        </div>
+      <div class="bb-top-center">
+        <span class="bb-security">XAUUSD Curncy</span>
+        <span class="bb-price" id="headerPrice">-----.--</span>
+        <span class="bb-change" id="headerChange">--.--</span>
+        <span class="bb-change-pct" id="headerChangePct">(--.--%)</span>
       </div>
-
-      <div class="bar bar-cmd">
-        <div class="cmd mono">
-          <span class="amber">CMD&gt;</span>
-          <span class="muted">Gold basis monitor • live polling • time-series</span>
-        </div>
-        <div id="globalError" class="err mono"></div>
+      <div class="bb-top-right">
+        <span class="bb-time" id="headerTime">--:--:--</span>
+        <span class="bb-date" id="headerDate">-- --- ----</span>
       </div>
     </header>
 
-    <!-- MAIN GRID -->
-    <main class="grid">
-      <!-- SNAPSHOT PANEL -->
-      <section class="panel">
-        <div class="phdr mono">[SNAPSHOT] LATEST (vs PYTH)</div>
+    <!-- Function Key Bar -->
+    <nav class="bb-func-bar">
+      <div class="bb-func-keys">
+        <span class="bb-fkey active" data-panel="all">1) MAIN</span>
+        <span class="bb-fkey" data-panel="basis">2) BASIS</span>
+        <span class="bb-fkey" data-panel="spot">3) SPOT</span>
+        <span class="bb-fkey" data-panel="funding">4) FUND</span>
+        <span class="bb-fkey" data-panel="diag">5) DIAG</span>
+        <span class="bb-fkey">6) NEWS</span>
+        <span class="bb-fkey">7) HIST</span>
+        <span class="bb-fkey">8) HELP</span>
+      </div>
+      <div class="bb-func-right">
+        <span class="bb-label">REFR</span>
+        <select id="refreshSelect" class="bb-select">
+          <option value="1000">1s</option>
+          <option value="2000">2s</option>
+          <option value="5000" selected>5s</option>
+          <option value="10000">10s</option>
+        </select>
+        <span class="bb-label">WIN</span>
+        <select id="windowSelect" class="bb-select">
+          <option value="900000">15m</option>
+          <option value="3600000" selected>1h</option>
+          <option value="21600000">6h</option>
+          <option value="86400000">24h</option>
+        </select>
+        <span class="bb-label">UNIT</span>
+        <button id="unitUsdBtn" class="bb-btn active">$</button>
+        <button id="unitBpsBtn" class="bb-btn">BPS</button>
+        <span class="bb-divider">|</span>
+        <span class="bb-status-light" id="statusLight"></span>
+        <span class="bb-status-text" id="statusText">CONNECTING</span>
+        <span class="bb-divider">|</span>
+        <button id="pauseBtn" class="bb-btn">PAUSE</button>
+        <button id="resumeBtn" class="bb-btn" disabled>RESUME</button>
+      </div>
+    </nav>
 
-        <div class="pbody">
-          <table class="tbl mono">
-            <thead>
-              <tr>
-                <th>VENUE</th>
-                <th class="r">MID</th>
-                <th class="r">BASIS $</th>
-                <th class="r">BASIS bps</th>
-                <th class="r">FUND</th>
-                <th class="r">NEXT</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>BINANCE</td>
-                <td id="tblBinanceMid" class="r">—</td>
-                <td id="tblBinanceBasisUsd" class="r basis">—</td>
-                <td id="tblBinanceBasisBps" class="r basis">—</td>
-                <td id="tblBinanceFunding" class="r">—</td>
-                <td id="tblBinanceNextFunding" class="r">—</td>
-              </tr>
-              <tr>
-                <td>HYPERLIQUID</td>
-                <td id="tblHLMid" class="r">—</td>
-                <td id="tblHLBasisUsd" class="r basis">—</td>
-                <td id="tblHLBasisBps" class="r basis">—</td>
-                <td class="r muted">—</td>
-                <td class="r muted">—</td>
-              </tr>
-              <tr>
-                <td>METEORA</td>
-                <td id="tblMeteoraMid" class="r">—</td>
-                <td id="tblMeteoraBasisUsd" class="r basis">—</td>
-                <td id="tblMeteoraBasisBps" class="r basis">—</td>
-                <td class="r muted">—</td>
-                <td class="r muted">—</td>
-              </tr>
-            </tbody>
-          </table>
+    <!-- Command Line -->
+    <div class="bb-cmd-bar">
+      <span class="bb-cmd-prompt">GOLD BASIS &lt;GO&gt;</span>
+      <span class="bb-cmd-desc">Real-time basis monitor • Pyth • Binance • Hyperliquid • Meteora</span>
+      <span class="bb-cmd-error" id="globalError"></span>
+    </div>
 
-          <div class="subhdr mono">[DISLOCATIONS] METEORA vs VENUES</div>
-          <table class="tbl mono">
-            <thead>
-              <tr>
-                <th>PAIR</th>
-                <th class="r">Δ $</th>
-                <th class="r">Δ bps</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>METEORA − BINANCE</td>
-                <td id="disMetBinUsd" class="r basis">—</td>
-                <td id="disMetBinBps" class="r basis">—</td>
-              </tr>
-              <tr>
-                <td>METEORA − HYPERLIQUID</td>
-                <td id="disMetHlUsd" class="r basis">—</td>
-                <td id="disMetHlBps" class="r basis">—</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="subhdr mono">[CONVERSION] BINANCE XAUUSDT → XAUUSDC</div>
-          <table class="tbl mono">
-            <thead>
-              <tr>
-                <th class="r">XAUUSDT mid</th>
-                <th class="r">USDCUSDT mid</th>
-                <th class="r">XAUUSDC implied</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td id="convXauUsdt" class="r">—</td>
-                <td id="convUsdcUsdt" class="r">—</td>
-                <td id="convXauUsdc" class="r">—</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="foot mono">
-            REF (PYTH): <span id="refPyth">—</span>
-            <span class="sep">|</span>
-            PUBLISH: <span id="refPythTime">—</span>
+    <!-- Main Content Grid -->
+    <main class="bb-main">
+      
+      <!-- Left Column -->
+      <div class="bb-col bb-col-left">
+        
+        <!-- Price Matrix Panel -->
+        <section class="bb-panel">
+          <div class="bb-panel-header">
+            <span class="bb-panel-num">1</span>
+            <span class="bb-panel-title">PRICE MATRIX</span>
+            <span class="bb-panel-subtitle">vs PYTH Reference</span>
           </div>
-        </div>
-      </section>
-
-      <!-- BASIS CHART -->
-      <section class="panel">
-        <div class="phdr mono">[BASIS] vs PYTH (CHART)</div>
-        <div class="pchart">
-          <canvas id="basisChart"></canvas>
-        </div>
-      </section>
-
-      <!-- PYTH SPOT CHART -->
-      <section class="panel">
-        <div class="phdr mono">[REF] PYTH XAUUSD (SPOT)</div>
-        <div class="pchart">
-          <canvas id="pythChart"></canvas>
-        </div>
-      </section>
-
-      <!-- FUNDING APY CHART -->
-      <section class="panel">
-        <div class="phdr mono">[FUNDING] BINANCE ANNUALIZED APY</div>
-        <div class="pchart">
-          <canvas id="fundingChart"></canvas>
-        </div>
-      </section>
-
-      <!-- NETWORK DIAGNOSTICS (full width) -->
-      <section class="panel span2">
-        <div class="phdr mono">[DIAG] NETWORK / FEED HEALTH</div>
-        <div class="pbody">
-          <table class="tbl mono">
-            <thead>
-              <tr>
-                <th>FEED</th>
-                <th class="r">STATUS</th>
-                <th class="r">AGE</th>
-                <th class="r">LAT</th>
-                <th>LAST ERROR</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>PYTH</td>
-                <td id="diagPythStatus" class="r">—</td>
-                <td id="diagPythAge" class="r">—</td>
-                <td id="diagPythLat" class="r">—</td>
-                <td id="diagPythErr" class="muted">—</td>
-              </tr>
-              <tr>
-                <td>BINANCE FUTURES</td>
-                <td id="diagBinFStatus" class="r">—</td>
-                <td id="diagBinFAge" class="r">—</td>
-                <td id="diagBinFLat" class="r">—</td>
-                <td id="diagBinFErr" class="muted">—</td>
-              </tr>
-              <tr>
-                <td>BINANCE SPOT (USDCUSDT)</td>
-                <td id="diagBinSStatus" class="r">—</td>
-                <td id="diagBinSAge" class="r">—</td>
-                <td id="diagBinSLat" class="r">—</td>
-                <td id="diagBinSErr" class="muted">—</td>
-              </tr>
-              <tr>
-                <td>HYPERLIQUID</td>
-                <td id="diagHlStatus" class="r">—</td>
-                <td id="diagHlAge" class="r">—</td>
-                <td id="diagHlLat" class="r">—</td>
-                <td id="diagHlErr" class="muted">—</td>
-              </tr>
-              <tr>
-                <td>METEORA</td>
-                <td id="diagMetStatus" class="r">—</td>
-                <td id="diagMetAge" class="r">—</td>
-                <td id="diagMetLat" class="r">—</td>
-                <td id="diagMetErr" class="muted">—</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="foot mono muted">
-            Tip: If a colleague sees “Failed to fetch”, it’s almost always network/CORS policy. Raise refresh to 5–10s.
+          <div class="bb-panel-body">
+            <table class="bb-table">
+              <thead>
+                <tr>
+                  <th class="col-venue">VENUE</th>
+                  <th class="col-mid">MID</th>
+                  <th class="col-basis">BASIS $</th>
+                  <th class="col-bps">BASIS BPS</th>
+                  <th class="col-fund">FUND</th>
+                  <th class="col-next">NEXT</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="venue-row" data-venue="binance">
+                  <td class="venue-name"><span class="venue-dot binance"></span>BINANCE</td>
+                  <td class="val-mid" id="tblBinanceMid">-.--</td>
+                  <td class="val-basis" id="tblBinanceBasisUsd">-.--</td>
+                  <td class="val-bps" id="tblBinanceBasisBps">-.--</td>
+                  <td class="val-fund" id="tblBinanceFunding">-.--</td>
+                  <td class="val-next" id="tblBinanceNextFunding">--:--</td>
+                </tr>
+                <tr class="venue-row" data-venue="hyperliquid">
+                  <td class="venue-name"><span class="venue-dot hyperliquid"></span>HYPERLIQUID</td>
+                  <td class="val-mid" id="tblHLMid">-.--</td>
+                  <td class="val-basis" id="tblHLBasisUsd">-.--</td>
+                  <td class="val-bps" id="tblHLBasisBps">-.--</td>
+                  <td class="val-fund muted">N/A</td>
+                  <td class="val-next muted">N/A</td>
+                </tr>
+                <tr class="venue-row" data-venue="meteora">
+                  <td class="venue-name"><span class="venue-dot meteora"></span>METEORA</td>
+                  <td class="val-mid" id="tblMeteoraMid">-.--</td>
+                  <td class="val-basis" id="tblMeteoraBasisUsd">-.--</td>
+                  <td class="val-bps" id="tblMeteoraBasisBps">-.--</td>
+                  <td class="val-fund muted">N/A</td>
+                  <td class="val-next muted">N/A</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-        </div>
-      </section>
+        </section>
+
+        <!-- Dislocations Panel -->
+        <section class="bb-panel">
+          <div class="bb-panel-header">
+            <span class="bb-panel-num">2</span>
+            <span class="bb-panel-title">DISLOCATIONS</span>
+            <span class="bb-panel-subtitle">Meteora vs Venues</span>
+          </div>
+          <div class="bb-panel-body">
+            <table class="bb-table">
+              <thead>
+                <tr>
+                  <th class="col-pair">PAIR</th>
+                  <th class="col-delta">Δ USD</th>
+                  <th class="col-delta">Δ BPS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>METEORA − BINANCE</td>
+                  <td class="val-basis" id="disMetBinUsd">-.--</td>
+                  <td class="val-bps" id="disMetBinBps">-.--</td>
+                </tr>
+                <tr>
+                  <td>METEORA − HYPERLIQUID</td>
+                  <td class="val-basis" id="disMetHlUsd">-.--</td>
+                  <td class="val-bps" id="disMetHlBps">-.--</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Conversion Panel -->
+        <section class="bb-panel">
+          <div class="bb-panel-header">
+            <span class="bb-panel-num">3</span>
+            <span class="bb-panel-title">CONVERSION</span>
+            <span class="bb-panel-subtitle">XAUUSDT → XAUUSDC</span>
+          </div>
+          <div class="bb-panel-body">
+            <table class="bb-table">
+              <thead>
+                <tr>
+                  <th>XAUUSDT MID</th>
+                  <th>USDCUSDT MID</th>
+                  <th>XAUUSDC IMPLIED</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td id="convXauUsdt" class="val-mid">-.--</td>
+                  <td id="convUsdcUsdt" class="val-mid">-.------</td>
+                  <td id="convXauUsdc" class="val-mid highlight">-.--</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Reference Panel -->
+        <section class="bb-panel bb-panel-ref">
+          <div class="bb-ref-row">
+            <span class="bb-ref-label">REF PRICE (PYTH)</span>
+            <span class="bb-ref-value" id="refPyth">-----.--</span>
+          </div>
+          <div class="bb-ref-row">
+            <span class="bb-ref-label">PUBLISH TIME</span>
+            <span class="bb-ref-value" id="refPythTime">-- --- ---- --:--:--</span>
+          </div>
+          <div class="bb-ref-row">
+            <span class="bb-ref-label">LAST UPDATE</span>
+            <span class="bb-ref-value" id="globalUpdated">--s ago</span>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Right Column -->
+      <div class="bb-col bb-col-right">
+        
+        <!-- Basis Chart -->
+        <section class="bb-panel bb-panel-chart">
+          <div class="bb-panel-header">
+            <span class="bb-panel-num">4</span>
+            <span class="bb-panel-title">BASIS CHART</span>
+            <span class="bb-panel-subtitle">vs PYTH Reference</span>
+            <div class="bb-legend">
+              <span class="bb-legend-item"><span class="bb-legend-dot binance"></span>BIN</span>
+              <span class="bb-legend-item"><span class="bb-legend-dot hyperliquid"></span>HL</span>
+              <span class="bb-legend-item"><span class="bb-legend-dot meteora"></span>MET</span>
+            </div>
+          </div>
+          <div class="bb-chart-container">
+            <canvas id="basisChart"></canvas>
+          </div>
+        </section>
+
+        <!-- Pyth Spot Chart -->
+        <section class="bb-panel bb-panel-chart">
+          <div class="bb-panel-header">
+            <span class="bb-panel-num">5</span>
+            <span class="bb-panel-title">PYTH XAUUSD SPOT</span>
+            <span class="bb-panel-subtitle">Reference Price</span>
+          </div>
+          <div class="bb-chart-container">
+            <canvas id="pythChart"></canvas>
+          </div>
+        </section>
+
+        <!-- Funding Chart -->
+        <section class="bb-panel bb-panel-chart">
+          <div class="bb-panel-header">
+            <span class="bb-panel-num">6</span>
+            <span class="bb-panel-title">FUNDING APY</span>
+            <span class="bb-panel-subtitle">Binance Annualized</span>
+          </div>
+          <div class="bb-chart-container">
+            <canvas id="fundingChart"></canvas>
+          </div>
+        </section>
+
+      </div>
+
     </main>
+
+    <!-- Bottom Diagnostics Panel -->
+    <section class="bb-panel bb-panel-diag">
+      <div class="bb-panel-header">
+        <span class="bb-panel-num">7</span>
+        <span class="bb-panel-title">NETWORK DIAGNOSTICS</span>
+        <span class="bb-panel-subtitle">Feed Health Monitor</span>
+      </div>
+      <div class="bb-panel-body">
+        <table class="bb-table bb-table-diag">
+          <thead>
+            <tr>
+              <th class="col-feed">FEED</th>
+              <th class="col-status">STATUS</th>
+              <th class="col-age">AGE</th>
+              <th class="col-lat">LATENCY</th>
+              <th class="col-err">LAST ERROR</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="feed-dot pyth"></span>PYTH NETWORK</td>
+              <td id="diagPythStatus" class="status-cell">--</td>
+              <td id="diagPythAge">--</td>
+              <td id="diagPythLat">--</td>
+              <td id="diagPythErr" class="err-cell">--</td>
+            </tr>
+            <tr>
+              <td><span class="feed-dot binance"></span>BINANCE FUTURES</td>
+              <td id="diagBinFStatus" class="status-cell">--</td>
+              <td id="diagBinFAge">--</td>
+              <td id="diagBinFLat">--</td>
+              <td id="diagBinFErr" class="err-cell">--</td>
+            </tr>
+            <tr>
+              <td><span class="feed-dot binance"></span>BINANCE SPOT</td>
+              <td id="diagBinSStatus" class="status-cell">--</td>
+              <td id="diagBinSAge">--</td>
+              <td id="diagBinSLat">--</td>
+              <td id="diagBinSErr" class="err-cell">--</td>
+            </tr>
+            <tr>
+              <td><span class="feed-dot hyperliquid"></span>HYPERLIQUID</td>
+              <td id="diagHlStatus" class="status-cell">--</td>
+              <td id="diagHlAge">--</td>
+              <td id="diagHlLat">--</td>
+              <td id="diagHlErr" class="err-cell">--</td>
+            </tr>
+            <tr>
+              <td><span class="feed-dot meteora"></span>METEORA DLMM</td>
+              <td id="diagMetStatus" class="status-cell">--</td>
+              <td id="diagMetAge">--</td>
+              <td id="diagMetLat">--</td>
+              <td id="diagMetErr" class="err-cell">--</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Bottom Status Bar -->
+    <footer class="bb-footer">
+      <span class="bb-footer-left">GOLD BASIS TERMINAL v1.0</span>
+      <span class="bb-footer-center">Press F1 for Help • Data provided by Pyth Network, Binance, Hyperliquid, Meteora</span>
+      <span class="bb-footer-right" id="footerTime">--:--:-- UTC</span>
+    </footer>
 
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="./app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
