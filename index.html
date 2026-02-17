@@ -3,258 +3,211 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GOLD BASIS</title>
+  <title>Gold Basis</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="term">
 
-  <!-- Menu Bar -->
-  <div class="menu-bar">
-    <div class="menu-left">
-      <span class="menu-item">GOLD BASIS</span>
-      <span class="menu-sep">|</span>
-      <span class="menu-item">BASIS</span>
-      <span class="menu-sep">|</span>
-      <span class="menu-item">SPOT</span>
-      <span class="menu-sep">|</span>
-      <span class="menu-item">FUNDING</span>
-      <span class="menu-sep">|</span>
-      <span class="menu-item">DIAG</span>
-      <span class="menu-sep">|</span>
-      <span class="menu-item">HELP</span>
-      <span class="menu-sep">|</span>
-      <span class="menu-item dim">Cmd+R</span>
+<div class="dashboard">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <div class="ticker-group">
+        <span class="ticker-symbol">XAUUSD</span>
+        <span class="ticker-price" id="price">--</span>
+        <span class="ticker-change" id="change">
+          <span id="changeVal">--</span>
+          <span id="changePct">(--)</span>
+        </span>
+      </div>
     </div>
-    <div class="menu-right">UTC <span id="topTime">--:--:--</span></div>
-  </div>
-
-  <!-- Quote Bar -->
-  <div class="quote-bar">
-    <div class="quote-left">
-      <span class="ticker">XAUUSD</span>
-      <span class="price" id="hdrPrice">US$-----.--</span>
-      <span id="hdrChg">--.--</span>
-      <span id="hdrPct">(--.--%)</span>
-    </div>
-    <div class="quote-right">
-      <span class="ctl-label">REFR</span>
-      <select id="selRefr" class="ctl-sel">
-        <option value="1000">1s</option>
-        <option value="2000">2s</option>
-        <option value="5000" selected>5s</option>
-        <option value="10000">10s</option>
-      </select>
-      <span class="ctl-label">WIN</span>
-      <select id="selWin" class="ctl-sel">
-        <option value="900000">15m</option>
-        <option value="3600000" selected>1h</option>
-        <option value="21600000">6h</option>
-        <option value="86400000">24h</option>
-      </select>
-      <span class="ctl-label">UNIT</span>
-      <button id="btnUsd" class="ctl-btn on">$</button>
-      <button id="btnBps" class="ctl-btn">bps</button>
-      <span class="ctl-label">UPD</span>
-      <span id="updAge">0s ago</span>
-      <span class="ctl-label">STAT</span>
-      <span class="status"><span class="dot" id="statusDot"></span><span id="statusTxt">LIVE</span></span>
-      <button id="btnPause" class="ctl-btn">PAUSE</button>
-      <button id="btnResume" class="ctl-btn" disabled>RESUME</button>
-    </div>
-  </div>
-
-  <!-- Cmd Bar -->
-  <div class="cmd-bar">
-    <span class="cmd-prompt">CMD&gt;</span>
-    <span class="cmd-txt">Gold basis monitor • live polling • time-series</span>
-    <span class="cmd-err" id="errMsg"></span>
-  </div>
-
-  <!-- Main -->
-  <div class="main">
-
-    <!-- Left Column -->
-    <div class="col-l">
-
-      <!-- Snapshot -->
-      <div class="pnl">
-        <div class="pnl-hdr">[SNAPSHOT] LATEST (vs PYTH)</div>
-        <div class="pnl-body">
-          <table class="tbl">
-            <thead>
-              <tr><th>VENUE</th><th>MID</th><th>BASIS $</th><th>BASIS BPS</th><th>FUND</th><th>NEXT</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>BINANCE</td>
-                <td id="binMid">--</td>
-                <td id="binBasisUsd">--</td>
-                <td id="binBasisBps">--</td>
-                <td id="binFund" class="cyn">--</td>
-                <td id="binNext">--</td>
-              </tr>
-              <tr>
-                <td>HYPERLIQUID</td>
-                <td id="hlMid">--</td>
-                <td id="hlBasisUsd">--</td>
-                <td id="hlBasisBps">--</td>
-                <td class="dim">--</td>
-                <td class="dim">--</td>
-              </tr>
-              <tr>
-                <td>METEORA</td>
-                <td id="metMid">--</td>
-                <td id="metBasisUsd">--</td>
-                <td id="metBasisBps">--</td>
-                <td class="dim">--</td>
-                <td class="dim">--</td>
-              </tr>
-            </tbody>
-          </table>
+    
+    <div class="header-right">
+      <div class="controls">
+        <div class="control-group">
+          <select class="control-select" id="selRefresh">
+            <option value="1000">1s</option>
+            <option value="2000">2s</option>
+            <option value="5000" selected>5s</option>
+            <option value="10000">10s</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <select class="control-select" id="selWindow">
+            <option value="900000">15m</option>
+            <option value="3600000" selected>1h</option>
+            <option value="21600000">6h</option>
+            <option value="86400000">24h</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <button class="control-btn active" id="btnUsd">USD</button>
+          <button class="control-btn" id="btnBps">BPS</button>
+        </div>
+        
+        <div class="control-group">
+          <button class="control-btn" id="btnPause">Pause</button>
+          <button class="control-btn" id="btnResume" disabled>Resume</button>
         </div>
       </div>
+      
+      <div class="status-indicator">
+        <span class="status-dot" id="statusDot"></span>
+        <span class="status-text" id="statusText">LIVE</span>
+      </div>
+      
+      <span class="updated-text" id="updatedText">Updated --</span>
+    </div>
+  </header>
 
-      <!-- Dislocations -->
-      <div class="pnl">
-        <div class="pnl-hdr">[DISLOCATIONS] METEORA vs VENUES</div>
-        <div class="pnl-body">
-          <table class="tbl">
-            <thead>
-              <tr><th>PAIR</th><th>Δ $</th><th>Δ BPS</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>METEORA − BINANCE</td>
-                <td id="dislMBusd">--</td>
-                <td id="dislMBbps">--</td>
-              </tr>
-              <tr>
-                <td>METEORA − HYPERLIQUID</td>
-                <td id="dislMHusd">--</td>
-                <td id="dislMHbps">--</td>
-              </tr>
-            </tbody>
-          </table>
+  <!-- Error Banner -->
+  <div class="error-banner" id="errorBanner"></div>
+
+  <!-- Main Grid -->
+  <main class="main-grid">
+
+    <!-- Hero Chart - PYTH XAUUSD -->
+    <div class="card hero-chart">
+      <div class="card-header">
+        <span class="card-title">PYTH XAUUSD Spot</span>
+        <div class="card-legend">
+          <span class="legend-item"><span class="legend-dot pyth"></span>Price</span>
         </div>
       </div>
-
-      <!-- Conversion -->
-      <div class="pnl">
-        <div class="pnl-hdr">[CONVERSION] BINANCE XAUUSDT → XAUUSDC</div>
-        <div class="pnl-body">
-          <table class="tbl">
-            <thead>
-              <tr><th>XAUUSDT MID</th><th>USDCUSDT MID</th><th>XAUUSDC IMPLIED</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td id="convXauUsdt">--</td>
-                <td id="convUsdcUsdt">--</td>
-                <td id="convImplied">--</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div class="card-body">
+        <canvas id="chartPyth"></canvas>
       </div>
+    </div>
 
-      <!-- Pyth Spot Chart -->
-      <div class="chart-pnl">
-        <div class="chart-hdr">
-          <span class="chart-title">[REF] PYTH XAUUSD (SPOT)</span>
-          <div class="chart-leg">
-            <span class="leg-item"><span class="leg-ln pyth"></span>PYTH XAUUSD</span>
+    <!-- Price Matrix -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Price Matrix</span>
+      </div>
+      <div class="card-body">
+        <table class="price-table">
+          <thead>
+            <tr>
+              <th>Venue</th>
+              <th>Mid</th>
+              <th>Basis $</th>
+              <th>Basis BPS</th>
+              <th>Funding</th>
+              <th>Next</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="venue-cell"><span class="venue-dot binance"></span>Binance</span></td>
+              <td id="binMid">--</td>
+              <td id="binBasisUsd">--</td>
+              <td id="binBasisBps">--</td>
+              <td id="binFund">--</td>
+              <td id="binNext">--</td>
+            </tr>
+            <tr>
+              <td><span class="venue-cell"><span class="venue-dot hl"></span>Hyperliquid</span></td>
+              <td id="hlMid">--</td>
+              <td id="hlBasisUsd">--</td>
+              <td id="hlBasisBps">--</td>
+              <td class="value-muted">--</td>
+              <td class="value-muted">--</td>
+            </tr>
+            <tr>
+              <td><span class="venue-cell"><span class="venue-dot meteora"></span>Meteora</span></td>
+              <td id="metMid">--</td>
+              <td id="metBasisUsd">--</td>
+              <td id="metBasisBps">--</td>
+              <td class="value-muted">--</td>
+              <td class="value-muted">--</td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <div class="conversion-stats">
+          <div class="stat-item">
+            <span class="stat-label">USDCUSDT Mid</span>
+            <span class="stat-value" id="usdcMid">--</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">XAUUSDC Implied</span>
+            <span class="stat-value" id="xauUsdcImplied">--</span>
           </div>
         </div>
-        <div class="chart-area"><canvas id="chartPyth"></canvas></div>
       </div>
-
     </div>
 
-    <!-- Right Column -->
-    <div class="col-r">
-
-      <!-- Basis Chart -->
-      <div class="chart-pnl">
-        <div class="chart-hdr">
-          <span class="chart-title">[BASIS] vs PYTH (CHART)</span>
-          <div class="chart-leg">
-            <span class="leg-item"><span class="leg-ln bin"></span>BINANCE basis</span>
-            <span class="leg-item"><span class="leg-ln hl"></span>HYPERLIQUID basis</span>
-            <span class="leg-item"><span class="leg-ln met"></span>METEORA basis</span>
-          </div>
+    <!-- Basis Spread Chart -->
+    <div class="card chart-card">
+      <div class="card-header">
+        <span class="card-title">Basis Spread</span>
+        <div class="card-legend">
+          <span class="legend-item"><span class="legend-dot binance"></span>Binance</span>
+          <span class="legend-item"><span class="legend-dot hl"></span>Hyperliquid</span>
+          <span class="legend-item"><span class="legend-dot meteora"></span>Meteora</span>
         </div>
-        <div class="chart-area"><canvas id="chartBasis"></canvas></div>
       </div>
+      <div class="card-body">
+        <canvas id="chartBasis"></canvas>
+      </div>
+    </div>
 
-      <!-- Funding Chart -->
-      <div class="chart-pnl">
-        <div class="chart-hdr">
-          <span class="chart-title">[FUNDING] BINANCE ANNUALIZED APY</span>
-          <div class="chart-leg">
-            <span class="leg-item"><span class="leg-ln apy"></span>BINANCE APY</span>
-          </div>
+    <!-- Dislocations Chart -->
+    <div class="card chart-card">
+      <div class="card-header">
+        <span class="card-title">Dislocations</span>
+        <div class="card-legend">
+          <span class="legend-item"><span class="legend-dot meteora"></span>MET-BIN</span>
+          <span class="legend-item"><span class="legend-dot hl"></span>MET-HL</span>
         </div>
-        <div class="chart-area"><canvas id="chartFund"></canvas></div>
       </div>
-
+      <div class="card-body">
+        <canvas id="chartDisloc"></canvas>
+      </div>
     </div>
 
-  </div>
-
-  <!-- Diag Panel -->
-  <div class="pnl">
-    <div class="pnl-hdr">[DIAG] NETWORK / FEED HEALTH</div>
-    <div class="pnl-body">
-      <table class="tbl diag-tbl">
-        <thead>
-          <tr><th>FEED</th><th>STATUS</th><th>AGE</th><th>LAT</th><th>LAST ERROR</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>PYTH</td>
-            <td id="dPythSt">--</td>
-            <td id="dPythAge">--</td>
-            <td id="dPythLat">--</td>
-            <td id="dPythErr">--</td>
-          </tr>
-          <tr>
-            <td>BINANCE FUTURES</td>
-            <td id="dBinFSt">--</td>
-            <td id="dBinFAge">--</td>
-            <td id="dBinFLat">--</td>
-            <td id="dBinFErr">--</td>
-          </tr>
-          <tr>
-            <td>HYPERLIQUID</td>
-            <td id="dHlSt">--</td>
-            <td id="dHlAge">--</td>
-            <td id="dHlLat">--</td>
-            <td id="dHlErr">--</td>
-          </tr>
-          <tr>
-            <td>METEORA</td>
-            <td id="dMetSt">--</td>
-            <td id="dMetAge">--</td>
-            <td id="dMetLat">--</td>
-            <td id="dMetErr">--</td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- Funding APY Chart -->
+    <div class="card chart-card">
+      <div class="card-header">
+        <span class="card-title">Funding APY</span>
+        <div class="card-legend">
+          <span class="legend-item"><span class="legend-dot funding"></span>Binance APY</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <canvas id="chartFunding"></canvas>
+      </div>
     </div>
-    <div class="tip-row">Tip: If a colleague sees "Failed to fetch", it's almost always network/CORS policy. Raise refresh to 5-10s.</div>
-  </div>
 
-  <!-- Footer -->
-  <div class="foot">
-    <span>GOLD BASIS TERMINAL</span>
-    <span>Data: Pyth Network • Binance • Hyperliquid • Meteora</span>
-    <span id="footTime">--:--:-- UTC</span>
-  </div>
+  </main>
+
+  <!-- Feed Status -->
+  <footer class="feed-status">
+    <div class="feed-item">
+      <span class="feed-dot" id="feedPyth"></span>
+      <span class="feed-name">Pyth</span>
+    </div>
+    <div class="feed-item">
+      <span class="feed-dot" id="feedBinance"></span>
+      <span class="feed-name">Binance</span>
+    </div>
+    <div class="feed-item">
+      <span class="feed-dot" id="feedHL"></span>
+      <span class="feed-name">Hyperliquid</span>
+    </div>
+    <div class="feed-item">
+      <span class="feed-dot" id="feedMeteora"></span>
+      <span class="feed-name">Meteora</span>
+    </div>
+  </footer>
 
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="app.js"></script>
+
 </body>
 </html>
