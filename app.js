@@ -1,384 +1,757 @@
-// GOLD BASIS TERMINAL
+// Gold Basis Dashboard - Modern Clean Version
 
-const PYTH_ID = "0x765d2ba906dbc32ca17cc11f5310a89e9ee1f6420508c63861f2f8ba4ee34bb2";
-const PYTH_URL = "https://hermes.pyth.network/v2/updates/price/latest";
-const BIN_BOOK = "https://fapi.binance.com/fapi/v1/ticker/bookTicker?symbol=XAUUSDT";
-const BIN_PREM = "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=XAUUSDT";
-const BIN_SPOT = "https://api.binance.com/api/v3/ticker/bookTicker?symbol=USDCUSDT";
-const HL_INFO = "https://api.hyperliquid.xyz/info";
-const MET_URL = "https://dlmm.datapi.meteora.ag/pools/3Vj8miZuTSdonf4W1xLdYFatrXLm38CShrCi7NbZS5Ah";
-const STALE = 30000;
-
-const $ = id => document.getElementById(id);
-const setText = (id, t) => { const e = $(id); if (e) e.textContent = t; };
-const fmtUsd = (x, d=2) => !Number.isFinite(x) ? "—" : "US$" + x.toLocaleString("en-US", {minimumFractionDigits:d, maximumFractionDigits:d});
-const fmtNum = (x, d=2) => !Number.isFinite(x) ? "—" : x.toLocaleString("en-US", {minimumFractionDigits:d, maximumFractionDigits:d});
-const fmtBps = x => !Number.isFinite(x) ? "—" : (x>0?"+":"") + fmtNum(x, 2);
-const fmtPct = (x, d=2) => !Number.isFinite(x) ? "—" : (x>0?"+":"") + fmtNum(x, d) + "%";
-const ageStr = ms => !ms ? "—" : Math.max(0, Math.floor((Date.now()-ms)/1000)) + "s";
-const timeStr = ms => new Date(ms).toLocaleTimeString("en-US", {hour12:false});
-const utcStr = () => new Date().toUTCString().slice(-12, -4);
-
-const basisUsd = (p, r) => (!Number.isFinite(p)||!Number.isFinite(r)||r===0) ? null : p - r;
-const basisBps = (p, r) => (!Number.isFinite(p)||!Number.isFinite(r)||r===0) ? null : ((p/r)-1)*10000;
-const fundApy = r => !Number.isFinite(r) ? null : (Math.pow(1+r, 1095)-1)*100;
-const stFromAge = ms => !ms ? "ERR" : (Date.now()-ms) > STALE ? "STALE" : "OK";
-const inRange = x => Number.isFinite(x) && x > 100 && x < 10000;
-
-async function timed(fn) {
-  const t0 = performance.now();
-  try { return { ok:true, v:await fn(), ms:Math.round(performance.now()-t0), err:"" }; }
-  catch(e) { return { ok:false, v:null, ms:Math.round(performance.now()-t0), err:String(e?.message||e) }; }
-}
-
-async function getPyth() {
-  const r = await fetch(`${PYTH_URL}?ids[]=${encodeURIComponent(PYTH_ID)}`);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const d = await r.json(), p = d?.parsed?.[0];
-  if (!p?.price) throw new Error("Bad data");
-  const price = Number(p.price.price) * Math.pow(10, Number(p.price.expo));
-  if (!Number.isFinite(price)) throw new Error("NaN");
-  return { price, pubMs: Number(p.price.publish_time)*1000 };
-}
-
-async function getBinFut() {
-  const [br, pr] = await Promise.all([fetch(BIN_BOOK), fetch(BIN_PREM)]);
-  if (!br.ok||!pr.ok) throw new Error("HTTP err");
-  const [b, p] = await Promise.all([br.json(), pr.json()]);
-  const mid = (Number(b.bidPrice)+Number(b.askPrice))/2;
-  if (!Number.isFinite(mid)) throw new Error("NaN");
-  return { mid, fundRate: Number(p.lastFundingRate), nextFundMs: Number(p.nextFundingTime) };
-}
-
-async function getBinSpot() {
-  const r = await fetch(BIN_SPOT);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const j = await r.json();
-  const mid = (Number(j.bidPrice)+Number(j.askPrice))/2;
-  if (!Number.isFinite(mid)||mid<=0) throw new Error("NaN");
-  return { mid };
-}
-
-async function getHL() {
-  const dr = await fetch(HL_INFO, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({type:"perpDexs"})});
-  if (!dr.ok) throw new Error("dexs err");
-  const dexs = await dr.json();
-  const dn = (Array.isArray(dexs)?dexs:[]).find(d=>String(d?.name).toLowerCase()==="flx")?.name || "flx";
-  const mr = await fetch(HL_INFO, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({type:"allMids", dex:dn})});
-  if (!mr.ok) throw new Error("mids err");
-  const mids = await mr.json();
-  let px = mids?.["GOLD"] ?? mids?.["flx:GOLD"] ?? mids?.["GOLD-USDC"];
-  if (px==null && mids) { const k = Object.keys(mids).find(k=>k.toUpperCase().includes("GOLD")); if(k) px=mids[k]; }
-  const mid = Number(px);
-  if (!Number.isFinite(mid)) throw new Error("NaN");
-  return { mid };
-}
-
-async function getMet() {
-  const r = await fetch(MET_URL);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const j = await r.json();
-  const p = Number(j?.current_price);
-  if (!Number.isFinite(p)||p<=0) throw new Error("No price");
-  const inv = 1/p;
-  let mid = inRange(p) ? p : inRange(inv) ? inv : p;
-  if (!Number.isFinite(mid)) throw new Error("NaN");
-  return { mid };
-}
-
-const S = {
-  paused:false, refrMs:5000, winMs:3600000, unit:"usd", lastTick:0,
-  pyth:{price:NaN, pubMs:0, okMs:0, latMs:0, err:""},
-  binF:{mid:NaN, fundRate:NaN, nextFundMs:0, okMs:0, latMs:0, err:""},
-  binS:{mid:NaN, okMs:0, latMs:0, err:""},
-  hl:{mid:NaN, okMs:0, latMs:0, err:""},
-  met:{mid:NaN, okMs:0, latMs:0, err:""},
-  pts:[], cBasis:null, cPyth:null, cFund:null
+// ============================================
+// CONFIGURATION
+// ============================================
+const CONFIG = {
+  PYTH_ID: "0x765d2ba906dbc32ca17cc11f5310a89e9ee1f6420508c63861f2f8ba4ee34bb2",
+  PYTH_URL: "https://hermes.pyth.network/v2/updates/price/latest",
+  BIN_BOOK: "https://fapi.binance.com/fapi/v1/ticker/bookTicker?symbol=XAUUSDT",
+  BIN_PREM: "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=XAUUSDT",
+  BIN_SPOT: "https://api.binance.com/api/v3/ticker/bookTicker?symbol=USDCUSDT",
+  HL_INFO: "https://api.hyperliquid.xyz/info",
+  MET_URL: "https://dlmm.datapi.meteora.ag/pools/3Vj8miZuTSdonf4W1xLdYFatrXLm38CShrCi7NbZS5Ah",
+  STALE_MS: 30000
 };
 
-function paintHdr() {
-  setText("topTime", utcStr());
-  setText("footTime", utcStr() + " UTC");
-  const px = S.pyth.price;
-  setText("hdrPrice", Number.isFinite(px) ? fmtUsd(px,2) : "US$-----.--");
-  let chg=NaN, pct=NaN;
-  if (S.pts.length>=2) {
-    const p1=S.pts[S.pts.length-1]?.pyth, p0=S.pts[0]?.pyth;
-    if (Number.isFinite(p1)&&Number.isFinite(p0)) { chg=p1-p0; pct=p0?(chg/p0)*100:NaN; }
+// Colors matching CSS
+const COLORS = {
+  binance: '#d29922',
+  hl: '#3fb950',
+  meteora: '#a371f7',
+  pyth: '#d29922',
+  funding: '#39c5cf',
+  grid: 'rgba(240, 246, 252, 0.06)',
+  text: '#7d8590',
+  textLight: '#e6edf3'
+};
+
+// ============================================
+// UTILITIES
+// ============================================
+const $ = id => document.getElementById(id);
+const setText = (id, text) => { const el = $(id); if (el) el.textContent = text; };
+
+const formatUsd = (n, decimals = 2) => {
+  if (!Number.isFinite(n)) return '--';
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+};
+
+const formatNum = (n, decimals = 2) => {
+  if (!Number.isFinite(n)) return '--';
+  return n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+};
+
+const formatBps = n => {
+  if (!Number.isFinite(n)) return '--';
+  return (n > 0 ? '+' : '') + formatNum(n, 2);
+};
+
+const formatPct = (n, decimals = 2) => {
+  if (!Number.isFinite(n)) return '--';
+  return (n > 0 ? '+' : '') + formatNum(n, decimals) + '%';
+};
+
+const timeAgo = ms => {
+  if (!ms) return '--';
+  const secs = Math.floor((Date.now() - ms) / 1000);
+  return secs + 's ago';
+};
+
+const formatTime = ms => new Date(ms).toLocaleTimeString('en-US', { hour12: false });
+
+// Calculations
+const basisUsd = (price, ref) => (Number.isFinite(price) && Number.isFinite(ref) && ref !== 0) ? price - ref : null;
+const basisBps = (price, ref) => (Number.isFinite(price) && Number.isFinite(ref) && ref !== 0) ? ((price / ref) - 1) * 10000 : null;
+const fundingApy = rate => Number.isFinite(rate) ? (Math.pow(1 + rate, 1095) - 1) * 100 : null;
+const inGoldRange = x => Number.isFinite(x) && x > 100 && x < 10000;
+
+// ============================================
+// STATE
+// ============================================
+const state = {
+  paused: false,
+  refreshMs: 5000,
+  windowMs: 3600000,
+  unit: 'usd',
+  lastTick: 0,
+  
+  pyth: { price: NaN, pubMs: 0, okMs: 0, latMs: 0, err: '' },
+  binF: { mid: NaN, fundRate: NaN, nextFundMs: 0, okMs: 0, latMs: 0, err: '' },
+  binS: { mid: NaN, okMs: 0, latMs: 0, err: '' },
+  hl: { mid: NaN, okMs: 0, latMs: 0, err: '' },
+  met: { mid: NaN, okMs: 0, latMs: 0, err: '' },
+  
+  points: [],
+  prevPrice: NaN,
+  
+  charts: {
+    pyth: null,
+    basis: null,
+    disloc: null,
+    funding: null
   }
-  const ce=$("hdrChg"), pe=$("hdrPct");
-  if(ce){ ce.textContent = Number.isFinite(chg) ? (chg>0?"+":"")+fmtNum(chg,2) : "--.--"; ce.className = chg>0?"chg-up":chg<0?"chg-dn":""; }
-  if(pe) pe.textContent = Number.isFinite(pct) ? "("+fmtPct(pct,2)+")" : "(--.--%)"
+};
+
+// ============================================
+// DATA FETCHERS
+// ============================================
+async function timedFetch(fn) {
+  const start = performance.now();
+  try {
+    const result = await fn();
+    return { ok: true, data: result, ms: Math.round(performance.now() - start), err: '' };
+  } catch (e) {
+    return { ok: false, data: null, ms: Math.round(performance.now() - start), err: e.message || String(e) };
+  }
 }
 
-function paintStatus() {
-  const ok = S.pyth.okMs && (Date.now()-S.pyth.okMs)<=STALE;
-  const dot=$("statusDot"), txt=$("statusTxt");
-  if(dot){ dot.className = "dot " + (S.paused?"warn":ok?"":"err"); }
-  if(txt) txt.textContent = S.paused?"PAUSED":ok?"LIVE":"ERROR";
-  setText("updAge", S.lastTick ? ageStr(S.lastTick)+" ago" : "--");
+async function fetchPyth() {
+  const res = await fetch(`${CONFIG.PYTH_URL}?ids[]=${encodeURIComponent(CONFIG.PYTH_ID)}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const parsed = data?.parsed?.[0];
+  if (!parsed?.price) throw new Error('Invalid data');
+  const price = Number(parsed.price.price) * Math.pow(10, Number(parsed.price.expo));
+  if (!Number.isFinite(price)) throw new Error('Invalid price');
+  return { price, pubMs: Number(parsed.price.publish_time) * 1000 };
 }
 
-function paintErr() {
-  const errs = [S.pyth.err, S.binF.err, S.binS.err, S.hl.err, S.met.err].filter(Boolean);
-  setText("errMsg", errs.join(" • "));
+async function fetchBinanceFutures() {
+  const [bookRes, premRes] = await Promise.all([fetch(CONFIG.BIN_BOOK), fetch(CONFIG.BIN_PREM)]);
+  if (!bookRes.ok || !premRes.ok) throw new Error('HTTP error');
+  const [book, prem] = await Promise.all([bookRes.json(), premRes.json()]);
+  const mid = (Number(book.bidPrice) + Number(book.askPrice)) / 2;
+  if (!Number.isFinite(mid)) throw new Error('Invalid mid');
+  return { mid, fundRate: Number(prem.lastFundingRate), nextFundMs: Number(prem.nextFundingTime) };
 }
 
-function setVC(id, v) {
-  const e=$(id); if(!e) return;
-  e.classList.remove("pos","neg");
-  if(Number.isFinite(v)) e.classList.add(v>0?"pos":"neg");
+async function fetchBinanceSpot() {
+  const res = await fetch(CONFIG.BIN_SPOT);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const mid = (Number(data.bidPrice) + Number(data.askPrice)) / 2;
+  if (!Number.isFinite(mid) || mid <= 0) throw new Error('Invalid mid');
+  return { mid };
 }
 
-function paintSnap() {
-  const ref = S.pyth.price;
-
-  const bU=basisUsd(S.binF.mid,ref), bB=basisBps(S.binF.mid,ref);
-  setText("binMid", fmtUsd(S.binF.mid,2));
-  setText("binBasisUsd", bU!=null?fmtUsd(bU,2):"—"); setVC("binBasisUsd",bU);
-  setText("binBasisBps", bB!=null?fmtBps(bB):"—"); setVC("binBasisBps",bB);
-  setText("binFund", Number.isFinite(S.binF.fundRate)?fmtPct(S.binF.fundRate*100,4):"—");
-  setText("binNext", S.binF.nextFundMs?timeStr(S.binF.nextFundMs):"—");
-
-  const hU=basisUsd(S.hl.mid,ref), hB=basisBps(S.hl.mid,ref);
-  setText("hlMid", fmtUsd(S.hl.mid,2));
-  setText("hlBasisUsd", hU!=null?fmtUsd(hU,2):"—"); setVC("hlBasisUsd",hU);
-  setText("hlBasisBps", hB!=null?fmtBps(hB):"—"); setVC("hlBasisBps",hB);
-
-  const mU=basisUsd(S.met.mid,ref), mB=basisBps(S.met.mid,ref);
-  setText("metMid", fmtUsd(S.met.mid,2));
-  setText("metBasisUsd", mU!=null?fmtUsd(mU,2):"—"); setVC("metBasisUsd",mU);
-  setText("metBasisBps", mB!=null?fmtBps(mB):"—"); setVC("metBasisBps",mB);
-
-  // Dislocations
-  const dBu=(Number.isFinite(S.met.mid)&&Number.isFinite(S.binF.mid))?(S.met.mid-S.binF.mid):null;
-  const dBb=dBu!=null&&S.binF.mid?((S.met.mid/S.binF.mid)-1)*10000:null;
-  setText("dislMBusd", dBu!=null?fmtUsd(dBu,2):"—"); setVC("dislMBusd",dBu);
-  setText("dislMBbps", dBb!=null?fmtBps(dBb):"—"); setVC("dislMBbps",dBb);
-
-  const dHu=(Number.isFinite(S.met.mid)&&Number.isFinite(S.hl.mid))?(S.met.mid-S.hl.mid):null;
-  const dHb=dHu!=null&&S.hl.mid?((S.met.mid/S.hl.mid)-1)*10000:null;
-  setText("dislMHusd", dHu!=null?fmtUsd(dHu,2):"—"); setVC("dislMHusd",dHu);
-  setText("dislMHbps", dHb!=null?fmtBps(dHb):"—"); setVC("dislMHbps",dHb);
-
-  // Conversion
-  setText("convXauUsdt", fmtUsd(S.binF.mid,2));
-  setText("convUsdcUsdt", fmtNum(S.binS.mid,6));
-  const impl = (Number.isFinite(S.binF.mid)&&Number.isFinite(S.binS.mid)&&S.binS.mid>0) ? S.binF.mid/S.binS.mid : NaN;
-  setText("convImplied", fmtUsd(impl,2));
+async function fetchHyperliquid() {
+  const dexRes = await fetch(CONFIG.HL_INFO, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'perpDexs' })
+  });
+  if (!dexRes.ok) throw new Error('Dex fetch failed');
+  const dexs = await dexRes.json();
+  const dexName = (Array.isArray(dexs) ? dexs : []).find(d => String(d?.name).toLowerCase() === 'flx')?.name || 'flx';
+  
+  const midsRes = await fetch(CONFIG.HL_INFO, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'allMids', dex: dexName })
+  });
+  if (!midsRes.ok) throw new Error('Mids fetch failed');
+  const mids = await midsRes.json();
+  
+  let price = mids?.['GOLD'] ?? mids?.['flx:GOLD'] ?? mids?.['GOLD-USDC'];
+  if (price == null && mids) {
+    const key = Object.keys(mids).find(k => k.toUpperCase().includes('GOLD'));
+    if (key) price = mids[key];
+  }
+  const mid = Number(price);
+  if (!Number.isFinite(mid)) throw new Error('Invalid mid');
+  return { mid };
 }
 
-function paintDiagRow(pre, f) {
-  const st = f.err ? "ERR" : stFromAge(f.okMs);
-  const e = $(pre+"St");
-  if(e){ e.textContent=st; e.className=st==="OK"?"st-ok":st==="STALE"?"st-wrn":"st-err"; }
-  setText(pre+"Age", f.okMs ? ageStr(f.okMs) : "—");
-  setText(pre+"Lat", f.latMs ? f.latMs+"ms" : "—");
-  setText(pre+"Err", f.err ? f.err.slice(0,60) : "—");
+async function fetchMeteora() {
+  const res = await fetch(CONFIG.MET_URL);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const price = Number(data?.current_price);
+  if (!Number.isFinite(price) || price <= 0) throw new Error('Invalid price');
+  const inv = 1 / price;
+  const mid = inGoldRange(price) ? price : inGoldRange(inv) ? inv : price;
+  if (!Number.isFinite(mid)) throw new Error('Invalid mid');
+  return { mid };
 }
 
-function paintDiag() {
-  paintDiagRow("dPyth", S.pyth);
-  paintDiagRow("dBinF", S.binF);
-  paintDiagRow("dHl", S.hl);
-  paintDiagRow("dMet", S.met);
+// ============================================
+// UI UPDATE FUNCTIONS
+// ============================================
+function updateHeader() {
+  const price = state.pyth.price;
+  const priceEl = $('price');
+  
+  // Animate price changes
+  if (priceEl && Number.isFinite(price)) {
+    const newText = formatUsd(price, 2);
+    if (priceEl.textContent !== newText) {
+      priceEl.textContent = newText;
+      if (Number.isFinite(state.prevPrice)) {
+        priceEl.classList.remove('value-flash-up', 'value-flash-down');
+        void priceEl.offsetWidth; // Force reflow
+        priceEl.classList.add(price > state.prevPrice ? 'value-flash-up' : 'value-flash-down');
+      }
+    }
+  }
+  
+  // Calculate change from first point in window
+  let change = NaN, changePct = NaN;
+  if (state.points.length >= 2) {
+    const first = state.points[0]?.pyth;
+    const last = state.points[state.points.length - 1]?.pyth;
+    if (Number.isFinite(first) && Number.isFinite(last)) {
+      change = last - first;
+      changePct = (change / first) * 100;
+    }
+  }
+  
+  const changeEl = $('change');
+  const changeValEl = $('changeVal');
+  const changePctEl = $('changePct');
+  
+  if (changeEl && changeValEl && changePctEl) {
+    changeEl.classList.remove('positive', 'negative');
+    if (Number.isFinite(change)) {
+      changeValEl.textContent = (change > 0 ? '+' : '') + formatNum(change, 2);
+      changePctEl.textContent = `(${formatPct(changePct, 2)})`;
+      changeEl.classList.add(change >= 0 ? 'positive' : 'negative');
+    } else {
+      changeValEl.textContent = '--';
+      changePctEl.textContent = '(--)';
+    }
+  }
+  
+  setText('updatedText', `Updated ${timeAgo(state.lastTick)}`);
+}
+
+function updateStatus() {
+  const now = Date.now();
+  const pythOk = state.pyth.okMs && (now - state.pyth.okMs) <= CONFIG.STALE_MS;
+  const allOk = pythOk && 
+    state.binF.okMs && (now - state.binF.okMs) <= CONFIG.STALE_MS &&
+    state.hl.okMs && (now - state.hl.okMs) <= CONFIG.STALE_MS &&
+    state.met.okMs && (now - state.met.okMs) <= CONFIG.STALE_MS;
+  
+  const dot = $('statusDot');
+  const text = $('statusText');
+  const indicator = dot?.parentElement;
+  
+  if (dot && text && indicator) {
+    dot.classList.remove('warning', 'error');
+    text.classList.remove('warning', 'error');
+    indicator.style.background = '';
+    
+    if (state.paused) {
+      dot.classList.add('warning');
+      text.classList.add('warning');
+      text.textContent = 'PAUSED';
+      indicator.style.background = 'rgba(210, 153, 34, 0.15)';
+    } else if (!pythOk) {
+      dot.classList.add('error');
+      text.classList.add('error');
+      text.textContent = 'ERROR';
+      indicator.style.background = 'rgba(248, 81, 73, 0.15)';
+    } else if (!allOk) {
+      dot.classList.add('warning');
+      text.classList.add('warning');
+      text.textContent = 'PARTIAL';
+      indicator.style.background = 'rgba(210, 153, 34, 0.15)';
+    } else {
+      text.textContent = 'LIVE';
+    }
+  }
+}
+
+function updateFeedStatus() {
+  const now = Date.now();
+  const feeds = [
+    { id: 'feedPyth', okMs: state.pyth.okMs },
+    { id: 'feedBinance', okMs: state.binF.okMs },
+    { id: 'feedHL', okMs: state.hl.okMs },
+    { id: 'feedMeteora', okMs: state.met.okMs }
+  ];
+  
+  feeds.forEach(feed => {
+    const el = $(feed.id);
+    if (el) {
+      el.classList.remove('warn', 'err');
+      if (!feed.okMs) {
+        el.classList.add('err');
+      } else if (now - feed.okMs > CONFIG.STALE_MS) {
+        el.classList.add('warn');
+      }
+    }
+  });
+}
+
+function updateErrors() {
+  const errors = [state.pyth.err, state.binF.err, state.binS.err, state.hl.err, state.met.err].filter(Boolean);
+  const banner = $('errorBanner');
+  if (banner) {
+    banner.textContent = errors.join(' • ');
+    banner.classList.toggle('visible', errors.length > 0);
+  }
+}
+
+function setValueClass(id, value) {
+  const el = $(id);
+  if (!el) return;
+  el.classList.remove('value-positive', 'value-negative');
+  if (Number.isFinite(value)) {
+    el.classList.add(value > 0 ? 'value-positive' : value < 0 ? 'value-negative' : '');
+  }
+}
+
+function updatePriceMatrix() {
+  const ref = state.pyth.price;
+  
+  // Binance
+  const binBasisU = basisUsd(state.binF.mid, ref);
+  const binBasisB = basisBps(state.binF.mid, ref);
+  setText('binMid', formatUsd(state.binF.mid, 2));
+  setText('binBasisUsd', binBasisU != null ? formatUsd(binBasisU, 2) : '--');
+  setText('binBasisBps', binBasisB != null ? formatBps(binBasisB) : '--');
+  setValueClass('binBasisUsd', binBasisU);
+  setValueClass('binBasisBps', binBasisB);
+  setText('binFund', Number.isFinite(state.binF.fundRate) ? formatPct(state.binF.fundRate * 100, 4) : '--');
+  setText('binNext', state.binF.nextFundMs ? formatTime(state.binF.nextFundMs) : '--');
+  
+  // Hyperliquid
+  const hlBasisU = basisUsd(state.hl.mid, ref);
+  const hlBasisB = basisBps(state.hl.mid, ref);
+  setText('hlMid', formatUsd(state.hl.mid, 2));
+  setText('hlBasisUsd', hlBasisU != null ? formatUsd(hlBasisU, 2) : '--');
+  setText('hlBasisBps', hlBasisB != null ? formatBps(hlBasisB) : '--');
+  setValueClass('hlBasisUsd', hlBasisU);
+  setValueClass('hlBasisBps', hlBasisB);
+  
+  // Meteora
+  const metBasisU = basisUsd(state.met.mid, ref);
+  const metBasisB = basisBps(state.met.mid, ref);
+  setText('metMid', formatUsd(state.met.mid, 2));
+  setText('metBasisUsd', metBasisU != null ? formatUsd(metBasisU, 2) : '--');
+  setText('metBasisBps', metBasisB != null ? formatBps(metBasisB) : '--');
+  setValueClass('metBasisUsd', metBasisU);
+  setValueClass('metBasisBps', metBasisB);
+  
+  // Conversion stats
+  setText('usdcMid', formatNum(state.binS.mid, 6));
+  const implied = (Number.isFinite(state.binF.mid) && Number.isFinite(state.binS.mid) && state.binS.mid > 0) 
+    ? state.binF.mid / state.binS.mid : NaN;
+  setText('xauUsdcImplied', formatUsd(implied, 2));
+}
+
+// ============================================
+// CHARTS
+// ============================================
+function createGradient(ctx, color, height) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, color.replace(')', ', 0.3)').replace('rgb', 'rgba'));
+  gradient.addColorStop(1, color.replace(')', ', 0)').replace('rgb', 'rgba'));
+  return gradient;
 }
 
 function buildCharts() {
-  if (typeof Chart === "undefined") return;
-
-  // Bloomberg chart style: white axes, dotted white grid lines, black background
-  const chartOpts = {
+  if (typeof Chart === 'undefined') return;
+  
+  const baseOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    animation: false,
-    plugins: { legend: { display: false } },
+    animation: { duration: 300 },
+    interaction: { intersect: false, mode: 'index' },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#21262d',
+        titleColor: COLORS.textLight,
+        bodyColor: COLORS.text,
+        borderColor: 'rgba(240, 246, 252, 0.1)',
+        borderWidth: 1,
+        padding: 12,
+        displayColors: true,
+        callbacks: {
+          title: items => items[0]?.label || ''
+        }
+      }
+    },
     scales: {
       x: {
-        ticks: { color: "#ffffff", maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { size: 9, family: "Consolas, monospace" } },
-        grid: { color: "rgba(255,255,255,0.15)", borderColor: "#ffffff", borderDash: [2, 2] },
-        border: { color: "#ffffff" }
+        grid: { color: COLORS.grid, drawBorder: false },
+        ticks: { color: COLORS.text, maxRotation: 0, autoSkip: true, maxTicksLimit: 6, font: { size: 10 } },
+        border: { display: false }
       },
       y: {
-        ticks: { color: "#ffffff", font: { size: 9, family: "Consolas, monospace" } },
-        grid: { color: "rgba(255,255,255,0.15)", borderColor: "#ffffff", borderDash: [2, 2] },
-        border: { color: "#ffffff" }
+        grid: { color: COLORS.grid, drawBorder: false },
+        ticks: { color: COLORS.text, font: { size: 10 } },
+        border: { display: false }
       }
     }
   };
-
-  const basisCtx = $("chartBasis")?.getContext("2d");
-  if (basisCtx) {
-    S.cBasis = new Chart(basisCtx, {
-      type: "line",
-      data: { labels: [], datasets: [
-        { label:"BIN", data:[], borderWidth:1.5, pointRadius:0, tension:0.2, borderColor:"#ff9900" },
-        { label:"HL", data:[], borderWidth:1.5, pointRadius:0, tension:0.2, borderColor:"#00ff00" },
-        { label:"MET", data:[], borderWidth:1.5, pointRadius:0, tension:0.2, borderColor:"#ff00ff" }
-      ]},
-      options: chartOpts
-    });
-  }
-
-  const pythCtx = $("chartPyth")?.getContext("2d");
+  
+  // Pyth Chart (with gradient fill)
+  const pythCtx = $('chartPyth')?.getContext('2d');
   if (pythCtx) {
-    S.cPyth = new Chart(pythCtx, {
-      type: "line",
-      data: { labels: [], datasets: [
-        { label:"PYTH", data:[], borderWidth:1.5, pointRadius:0, tension:0.2, borderColor:"#ff9900" }
-      ]},
-      options: chartOpts
+    const gradient = pythCtx.createLinearGradient(0, 0, 0, 280);
+    gradient.addColorStop(0, 'rgba(210, 153, 34, 0.25)');
+    gradient.addColorStop(1, 'rgba(210, 153, 34, 0)');
+    
+    state.charts.pyth = new Chart(pythCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          data: [],
+          borderColor: COLORS.pyth,
+          backgroundColor: gradient,
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+          fill: true
+        }]
+      },
+      options: baseOptions
     });
   }
-
-  const fundCtx = $("chartFund")?.getContext("2d");
-  if (fundCtx) {
-    S.cFund = new Chart(fundCtx, {
-      type: "line",
-      data: { labels: [], datasets: [
-        { label:"APY", data:[], borderWidth:1.5, pointRadius:0, tension:0.2, borderColor:"#00ffff" }
-      ]},
+  
+  // Basis Chart (no fill)
+  const basisCtx = $('chartBasis')?.getContext('2d');
+  if (basisCtx) {
+    state.charts.basis = new Chart(basisCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { data: [], borderColor: COLORS.binance, borderWidth: 2, pointRadius: 0, tension: 0.3, fill: false },
+          { data: [], borderColor: COLORS.hl, borderWidth: 2, pointRadius: 0, tension: 0.3, fill: false },
+          { data: [], borderColor: COLORS.meteora, borderWidth: 2, pointRadius: 0, tension: 0.3, fill: false }
+        ]
+      },
+      options: baseOptions
+    });
+  }
+  
+  // Dislocations Chart (with gradient fills)
+  const dislocCtx = $('chartDisloc')?.getContext('2d');
+  if (dislocCtx) {
+    const gradientMet = dislocCtx.createLinearGradient(0, 0, 0, 220);
+    gradientMet.addColorStop(0, 'rgba(163, 113, 247, 0.25)');
+    gradientMet.addColorStop(1, 'rgba(163, 113, 247, 0)');
+    
+    const gradientHl = dislocCtx.createLinearGradient(0, 0, 0, 220);
+    gradientHl.addColorStop(0, 'rgba(63, 185, 80, 0.25)');
+    gradientHl.addColorStop(1, 'rgba(63, 185, 80, 0)');
+    
+    state.charts.disloc = new Chart(dislocCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { data: [], borderColor: COLORS.meteora, backgroundColor: gradientMet, borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true },
+          { data: [], borderColor: COLORS.hl, backgroundColor: gradientHl, borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true }
+        ]
+      },
+      options: baseOptions
+    });
+  }
+  
+  // Funding Chart (with gradient fill)
+  const fundingCtx = $('chartFunding')?.getContext('2d');
+  if (fundingCtx) {
+    const gradient = fundingCtx.createLinearGradient(0, 0, 0, 220);
+    gradient.addColorStop(0, 'rgba(57, 197, 207, 0.25)');
+    gradient.addColorStop(1, 'rgba(57, 197, 207, 0)');
+    
+    state.charts.funding = new Chart(fundingCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          data: [],
+          borderColor: COLORS.funding,
+          backgroundColor: gradient,
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+          fill: true
+        }]
+      },
       options: {
-        ...chartOpts,
+        ...baseOptions,
         scales: {
-          ...chartOpts.scales,
-          y: { ...chartOpts.scales.y, ticks: { ...chartOpts.scales.y.ticks, callback: v => v.toFixed(2)+"%" } }
+          ...baseOptions.scales,
+          y: {
+            ...baseOptions.scales.y,
+            ticks: {
+              ...baseOptions.scales.y.ticks,
+              callback: v => v.toFixed(2) + '%'
+            }
+          }
         }
       }
     });
   }
 }
 
-function prune() {
-  const cut = Date.now() - S.winMs;
-  S.pts = S.pts.filter(p => p.t >= cut);
+function prunePoints() {
+  const cutoff = Date.now() - state.windowMs;
+  state.points = state.points.filter(p => p.t >= cutoff);
 }
 
-function syncCharts() {
-  prune();
-  const labels = S.pts.map(p => timeStr(p.t));
-
-  if (S.cBasis) {
-    S.cBasis.data.labels = labels;
-    S.cBasis.data.datasets[0].data = S.pts.map(p => S.unit==="usd"?p.binUsd:p.binBps);
-    S.cBasis.data.datasets[1].data = S.pts.map(p => S.unit==="usd"?p.hlUsd:p.hlBps);
-    S.cBasis.data.datasets[2].data = S.pts.map(p => S.unit==="usd"?p.metUsd:p.metBps);
-    S.cBasis.update("none");
+function updateCharts() {
+  prunePoints();
+  const labels = state.points.map(p => formatTime(p.t));
+  
+  // Pyth chart
+  if (state.charts.pyth) {
+    state.charts.pyth.data.labels = labels;
+    state.charts.pyth.data.datasets[0].data = state.points.map(p => p.pyth);
+    state.charts.pyth.update('none');
   }
-
-  if (S.cPyth) {
-    S.cPyth.data.labels = labels;
-    S.cPyth.data.datasets[0].data = S.pts.map(p => p.pyth);
-    S.cPyth.update("none");
+  
+  // Basis chart
+  if (state.charts.basis) {
+    state.charts.basis.data.labels = labels;
+    state.charts.basis.data.datasets[0].data = state.points.map(p => state.unit === 'usd' ? p.binBasisUsd : p.binBasisBps);
+    state.charts.basis.data.datasets[1].data = state.points.map(p => state.unit === 'usd' ? p.hlBasisUsd : p.hlBasisBps);
+    state.charts.basis.data.datasets[2].data = state.points.map(p => state.unit === 'usd' ? p.metBasisUsd : p.metBasisBps);
+    state.charts.basis.update('none');
   }
-
-  if (S.cFund) {
-    S.cFund.data.labels = labels;
-    S.cFund.data.datasets[0].data = S.pts.map(p => p.apy);
-    S.cFund.update("none");
+  
+  // Dislocations chart
+  if (state.charts.disloc) {
+    state.charts.disloc.data.labels = labels;
+    state.charts.disloc.data.datasets[0].data = state.points.map(p => state.unit === 'usd' ? p.dislocMBusd : p.dislocMBbps);
+    state.charts.disloc.data.datasets[1].data = state.points.map(p => state.unit === 'usd' ? p.dislocMHusd : p.dislocMHbps);
+    state.charts.disloc.update('none');
+  }
+  
+  // Funding chart
+  if (state.charts.funding) {
+    state.charts.funding.data.labels = labels;
+    state.charts.funding.data.datasets[0].data = state.points.map(p => p.apy);
+    state.charts.funding.update('none');
   }
 }
 
+// ============================================
+// MAIN TICK
+// ============================================
 async function tick() {
-  if (S.paused) return;
+  if (state.paused) return;
+  
   const now = Date.now();
-  S.lastTick = now;
-
-  const [rP, rBF, rBS, rHL, rM] = await Promise.all([timed(getPyth), timed(getBinFut), timed(getBinSpot), timed(getHL), timed(getMet)]);
-
-  if (rP.ok) { S.pyth.price=rP.v.price; S.pyth.pubMs=rP.v.pubMs; S.pyth.okMs=now; S.pyth.err=""; }
-  else S.pyth.err="PYTH: "+rP.err;
-  S.pyth.latMs=rP.ms;
-
-  if (rBF.ok) { S.binF.mid=rBF.v.mid; S.binF.fundRate=rBF.v.fundRate; S.binF.nextFundMs=rBF.v.nextFundMs; S.binF.okMs=now; S.binF.err=""; }
-  else S.binF.err="BINANCE: "+rBF.err;
-  S.binF.latMs=rBF.ms;
-
-  if (rBS.ok) { S.binS.mid=rBS.v.mid; S.binS.okMs=now; S.binS.err=""; }
-  else S.binS.err="BIN SPOT: "+rBS.err;
-  S.binS.latMs=rBS.ms;
-
-  if (rHL.ok) { S.hl.mid=rHL.v.mid; S.hl.okMs=now; S.hl.err=""; }
-  else S.hl.err="HL: "+rHL.err;
-  S.hl.latMs=rHL.ms;
-
-  if (rM.ok) { S.met.mid=rM.v.mid; S.met.okMs=now; S.met.err=""; }
-  else S.met.err="METEORA: "+rM.err;
-  S.met.latMs=rM.ms;
-
-  const ref = S.pyth.price;
-  S.pts.push({
+  state.lastTick = now;
+  state.prevPrice = state.pyth.price;
+  
+  // Fetch all data in parallel
+  const [pyth, binF, binS, hl, met] = await Promise.all([
+    timedFetch(fetchPyth),
+    timedFetch(fetchBinanceFutures),
+    timedFetch(fetchBinanceSpot),
+    timedFetch(fetchHyperliquid),
+    timedFetch(fetchMeteora)
+  ]);
+  
+  // Update state
+  if (pyth.ok) {
+    state.pyth.price = pyth.data.price;
+    state.pyth.pubMs = pyth.data.pubMs;
+    state.pyth.okMs = now;
+    state.pyth.err = '';
+  } else {
+    state.pyth.err = 'Pyth: ' + pyth.err;
+  }
+  state.pyth.latMs = pyth.ms;
+  
+  if (binF.ok) {
+    state.binF.mid = binF.data.mid;
+    state.binF.fundRate = binF.data.fundRate;
+    state.binF.nextFundMs = binF.data.nextFundMs;
+    state.binF.okMs = now;
+    state.binF.err = '';
+  } else {
+    state.binF.err = 'Binance: ' + binF.err;
+  }
+  state.binF.latMs = binF.ms;
+  
+  if (binS.ok) {
+    state.binS.mid = binS.data.mid;
+    state.binS.okMs = now;
+    state.binS.err = '';
+  } else {
+    state.binS.err = 'Binance Spot: ' + binS.err;
+  }
+  state.binS.latMs = binS.ms;
+  
+  if (hl.ok) {
+    state.hl.mid = hl.data.mid;
+    state.hl.okMs = now;
+    state.hl.err = '';
+  } else {
+    state.hl.err = 'Hyperliquid: ' + hl.err;
+  }
+  state.hl.latMs = hl.ms;
+  
+  if (met.ok) {
+    state.met.mid = met.data.mid;
+    state.met.okMs = now;
+    state.met.err = '';
+  } else {
+    state.met.err = 'Meteora: ' + met.err;
+  }
+  state.met.latMs = met.ms;
+  
+  // Calculate derived values
+  const ref = state.pyth.price;
+  const binBasisUsd = basisUsd(state.binF.mid, ref);
+  const binBasisBps = basisBps(state.binF.mid, ref);
+  const hlBasisUsd = basisUsd(state.hl.mid, ref);
+  const hlBasisBps = basisBps(state.hl.mid, ref);
+  const metBasisUsd = basisUsd(state.met.mid, ref);
+  const metBasisBps = basisBps(state.met.mid, ref);
+  
+  const dislocMBusd = (Number.isFinite(state.met.mid) && Number.isFinite(state.binF.mid)) ? state.met.mid - state.binF.mid : null;
+  const dislocMBbps = (dislocMBusd != null && state.binF.mid) ? ((state.met.mid / state.binF.mid) - 1) * 10000 : null;
+  const dislocMHusd = (Number.isFinite(state.met.mid) && Number.isFinite(state.hl.mid)) ? state.met.mid - state.hl.mid : null;
+  const dislocMHbps = (dislocMHusd != null && state.hl.mid) ? ((state.met.mid / state.hl.mid) - 1) * 10000 : null;
+  
+  // Add data point
+  state.points.push({
     t: now,
     pyth: Number.isFinite(ref) ? ref : null,
-    binUsd: basisUsd(S.binF.mid, ref),
-    binBps: basisBps(S.binF.mid, ref),
-    hlUsd: basisUsd(S.hl.mid, ref),
-    hlBps: basisBps(S.hl.mid, ref),
-    metUsd: basisUsd(S.met.mid, ref),
-    metBps: basisBps(S.met.mid, ref),
-    apy: fundApy(S.binF.fundRate)
+    binBasisUsd, binBasisBps,
+    hlBasisUsd, hlBasisBps,
+    metBasisUsd, metBasisBps,
+    dislocMBusd, dislocMBbps,
+    dislocMHusd, dislocMHbps,
+    apy: fundingApy(state.binF.fundRate)
   });
-
-  paintErr(); paintStatus(); paintHdr(); paintSnap(); paintDiag(); syncCharts();
+  
+  // Update UI
+  updateHeader();
+  updateStatus();
+  updateFeedStatus();
+  updateErrors();
+  updatePriceMatrix();
+  updateCharts();
 }
 
-let pollTimer, uiTimer;
+// ============================================
+// CONTROLS & INITIALIZATION
+// ============================================
+let pollInterval, uiInterval;
 
-function startPoll() {
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(tick, S.refrMs);
+function startPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(tick, state.refreshMs);
 }
 
-function startUi() {
-  if (uiTimer) clearInterval(uiTimer);
-  uiTimer = setInterval(() => { paintHdr(); paintStatus(); paintDiag(); }, 1000);
+function startUIUpdates() {
+  if (uiInterval) clearInterval(uiInterval);
+  uiInterval = setInterval(() => {
+    updateHeader();
+    updateStatus();
+    updateFeedStatus();
+  }, 1000);
 }
 
-function wire() {
-  $("selRefr")?.addEventListener("change", e => { S.refrMs = Number(e.target.value); startPoll(); });
-  $("selWin")?.addEventListener("change", e => { S.winMs = Number(e.target.value); prune(); syncCharts(); });
-
-  $("btnUsd")?.addEventListener("click", () => {
-    S.unit = "usd";
-    $("btnUsd")?.classList.add("on");
-    $("btnBps")?.classList.remove("on");
-    syncCharts();
+function wireControls() {
+  // Refresh rate
+  $('selRefresh')?.addEventListener('change', e => {
+    state.refreshMs = Number(e.target.value);
+    startPolling();
   });
-
-  $("btnBps")?.addEventListener("click", () => {
-    S.unit = "bps";
-    $("btnBps")?.classList.add("on");
-    $("btnUsd")?.classList.remove("on");
-    syncCharts();
+  
+  // Time window
+  $('selWindow')?.addEventListener('change', e => {
+    state.windowMs = Number(e.target.value);
+    prunePoints();
+    updateCharts();
   });
-
-  $("btnPause")?.addEventListener("click", () => {
-    S.paused = true;
-    $("btnPause").disabled = true;
-    $("btnResume").disabled = false;
-    paintStatus();
+  
+  // Unit toggle
+  $('btnUsd')?.addEventListener('click', () => {
+    state.unit = 'usd';
+    $('btnUsd')?.classList.add('active');
+    $('btnBps')?.classList.remove('active');
+    updateCharts();
   });
-
-  $("btnResume")?.addEventListener("click", () => {
-    S.paused = false;
-    $("btnPause").disabled = false;
-    $("btnResume").disabled = true;
+  
+  $('btnBps')?.addEventListener('click', () => {
+    state.unit = 'bps';
+    $('btnBps')?.classList.add('active');
+    $('btnUsd')?.classList.remove('active');
+    updateCharts();
+  });
+  
+  // Pause/Resume
+  $('btnPause')?.addEventListener('click', () => {
+    state.paused = true;
+    $('btnPause').disabled = true;
+    $('btnResume').disabled = false;
+    updateStatus();
+  });
+  
+  $('btnResume')?.addEventListener('click', () => {
+    state.paused = false;
+    $('btnPause').disabled = false;
+    $('btnResume').disabled = true;
     tick();
-    paintStatus();
+    updateStatus();
+  });
+  
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    
+    switch(e.key.toLowerCase()) {
+      case 'r':
+        if (!state.paused) tick();
+        break;
+      case 'p':
+        if (!state.paused) {
+          state.paused = true;
+          $('btnPause').disabled = true;
+          $('btnResume').disabled = false;
+        } else {
+          state.paused = false;
+          $('btnPause').disabled = false;
+          $('btnResume').disabled = true;
+          tick();
+        }
+        updateStatus();
+        break;
+      case 'u':
+        if (state.unit === 'usd') {
+          state.unit = 'bps';
+          $('btnBps')?.classList.add('active');
+          $('btnUsd')?.classList.remove('active');
+        } else {
+          state.unit = 'usd';
+          $('btnUsd')?.classList.add('active');
+          $('btnBps')?.classList.remove('active');
+        }
+        updateCharts();
+        break;
+    }
   });
 }
 
-(function init() {
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
-  else boot();
-})();
+function init() {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+}
 
 function boot() {
-  wire();
+  wireControls();
   buildCharts();
-  paintHdr();
-  paintStatus();
   tick();
-  startPoll();
-  startUi();
+  startPolling();
+  startUIUpdates();
 }
+
+init();
