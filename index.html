@@ -3,172 +3,160 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GOLD BASIS &lt;GO&gt;</title>
+  <title>GOLD BASIS</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Bloomberg Terminal Container -->
-  <div class="bloomberg-terminal">
+  <div class="terminal">
     
-    <!-- Top Orange Header Bar -->
-    <header class="bb-top-bar">
-      <div class="bb-top-left">
-        <span class="bb-logo">BLOOMBERG</span>
+    <!-- Top Menu Bar -->
+    <div class="top-bar">
+      <div class="top-left">
+        <span class="menu-item">GOLD BASIS</span>
+        <span class="menu-sep">|</span>
+        <span class="menu-item">BASIS</span>
+        <span class="menu-sep">|</span>
+        <span class="menu-item">SPOT</span>
+        <span class="menu-sep">|</span>
+        <span class="menu-item">FUNDING</span>
+        <span class="menu-sep">|</span>
+        <span class="menu-item">DIAG</span>
+        <span class="menu-sep">|</span>
+        <span class="menu-item">HELP</span>
+        <span class="menu-sep">|</span>
+        <span class="menu-item" style="color:#555">Cmd+R</span>
       </div>
-      <div class="bb-top-center">
-        <span class="bb-security">XAUUSD Curncy</span>
-        <span class="bb-price" id="headerPrice">-----.--</span>
-        <span class="bb-change" id="headerChange">--.--</span>
-        <span class="bb-change-pct" id="headerChangePct">(--.--%)</span>
+      <div class="top-right">
+        UTC <span id="topTime">--:--:--</span>
       </div>
-      <div class="bb-top-right">
-        <span class="bb-time" id="headerTime">--:--:--</span>
-        <span class="bb-date" id="headerDate">-- --- ----</span>
-      </div>
-    </header>
+    </div>
 
-    <!-- Function Key Bar -->
-    <nav class="bb-func-bar">
-      <div class="bb-func-keys">
-        <span class="bb-fkey active" data-panel="all">1) MAIN</span>
-        <span class="bb-fkey" data-panel="basis">2) BASIS</span>
-        <span class="bb-fkey" data-panel="spot">3) SPOT</span>
-        <span class="bb-fkey" data-panel="funding">4) FUND</span>
-        <span class="bb-fkey" data-panel="diag">5) DIAG</span>
-        <span class="bb-fkey">6) NEWS</span>
-        <span class="bb-fkey">7) HIST</span>
-        <span class="bb-fkey">8) HELP</span>
+    <!-- Quote Bar -->
+    <div class="quote-bar">
+      <div class="quote-left">
+        <span class="ticker">XAUUSD</span>
+        <span class="price" id="headerPrice">-----.--</span>
+        <span class="change" id="headerChange">--.--</span>
+        <span class="change" id="headerChangePct">(--.--%)</span>
       </div>
-      <div class="bb-func-right">
-        <span class="bb-label">REFR</span>
-        <select id="refreshSelect" class="bb-select">
+      <div class="quote-right">
+        <span class="ctrl-label">REFR</span>
+        <select id="refreshSelect" class="ctrl-select">
           <option value="1000">1s</option>
           <option value="2000">2s</option>
           <option value="5000" selected>5s</option>
           <option value="10000">10s</option>
         </select>
-        <span class="bb-label">WIN</span>
-        <select id="windowSelect" class="bb-select">
+        <span class="ctrl-label">WIN</span>
+        <select id="windowSelect" class="ctrl-select">
           <option value="900000">15m</option>
           <option value="3600000" selected>1h</option>
           <option value="21600000">6h</option>
           <option value="86400000">24h</option>
         </select>
-        <span class="bb-label">UNIT</span>
-        <button id="unitUsdBtn" class="bb-btn active">$</button>
-        <button id="unitBpsBtn" class="bb-btn">BPS</button>
-        <span class="bb-divider">|</span>
-        <span class="bb-status-light" id="statusLight"></span>
-        <span class="bb-status-text" id="statusText">CONNECTING</span>
-        <span class="bb-divider">|</span>
-        <button id="pauseBtn" class="bb-btn">PAUSE</button>
-        <button id="resumeBtn" class="bb-btn" disabled>RESUME</button>
+        <span class="ctrl-label">UNIT</span>
+        <button id="unitUsdBtn" class="ctrl-btn active">$</button>
+        <button id="unitBpsBtn" class="ctrl-btn">bps</button>
+        <span class="ctrl-label">UPD</span>
+        <span id="globalUpdated">--</span>
+        <span class="ctrl-label">STAT</span>
+        <span class="status-dot ok" id="statusDot"></span><span id="statusText">LIVE</span>
+        <button id="pauseBtn" class="ctrl-btn">PAUSE</button>
+        <button id="resumeBtn" class="ctrl-btn" disabled>RESUME</button>
       </div>
-    </nav>
-
-    <!-- Command Line -->
-    <div class="bb-cmd-bar">
-      <span class="bb-cmd-prompt">GOLD BASIS &lt;GO&gt;</span>
-      <span class="bb-cmd-desc">Real-time basis monitor • Pyth • Binance • Hyperliquid • Meteora</span>
-      <span class="bb-cmd-error" id="globalError"></span>
     </div>
 
-    <!-- Main Content Grid -->
-    <main class="bb-main">
+    <!-- Command Bar -->
+    <div class="cmd-bar">
+      <span class="cmd-prompt">CMD&gt;</span>
+      <span class="cmd-text">Gold basis monitor • live polling • time-series</span>
+      <span class="cmd-error" id="globalError"></span>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main">
       
       <!-- Left Column -->
-      <div class="bb-col bb-col-left">
+      <div class="col-left">
         
-        <!-- Price Matrix Panel -->
-        <section class="bb-panel">
-          <div class="bb-panel-header">
-            <span class="bb-panel-num">1</span>
-            <span class="bb-panel-title">PRICE MATRIX</span>
-            <span class="bb-panel-subtitle">vs PYTH Reference</span>
-          </div>
-          <div class="bb-panel-body">
-            <table class="bb-table">
+        <!-- Snapshot Panel -->
+        <div class="panel">
+          <div class="panel-hdr">[SNAPSHOT] LATEST (vs PYTH)</div>
+          <div class="panel-body">
+            <table class="tbl">
               <thead>
                 <tr>
-                  <th class="col-venue">VENUE</th>
-                  <th class="col-mid">MID</th>
-                  <th class="col-basis">BASIS $</th>
-                  <th class="col-bps">BASIS BPS</th>
-                  <th class="col-fund">FUND</th>
-                  <th class="col-next">NEXT</th>
+                  <th>VENUE</th>
+                  <th>MID</th>
+                  <th>BASIS $</th>
+                  <th>BASIS BPS</th>
+                  <th>FUND</th>
+                  <th>NEXT</th>
                 </tr>
               </thead>
               <tbody>
-                <tr class="venue-row" data-venue="binance">
-                  <td class="venue-name"><span class="venue-dot binance"></span>BINANCE</td>
-                  <td class="val-mid" id="tblBinanceMid">-.--</td>
-                  <td class="val-basis" id="tblBinanceBasisUsd">-.--</td>
-                  <td class="val-bps" id="tblBinanceBasisBps">-.--</td>
-                  <td class="val-fund" id="tblBinanceFunding">-.--</td>
-                  <td class="val-next" id="tblBinanceNextFunding">--:--</td>
+                <tr>
+                  <td>BINANCE</td>
+                  <td id="tblBinanceMid">--</td>
+                  <td id="tblBinanceBasisUsd">--</td>
+                  <td id="tblBinanceBasisBps">--</td>
+                  <td id="tblBinanceFunding" class="v-cyan">--</td>
+                  <td id="tblBinanceNextFunding">--</td>
                 </tr>
-                <tr class="venue-row" data-venue="hyperliquid">
-                  <td class="venue-name"><span class="venue-dot hyperliquid"></span>HYPERLIQUID</td>
-                  <td class="val-mid" id="tblHLMid">-.--</td>
-                  <td class="val-basis" id="tblHLBasisUsd">-.--</td>
-                  <td class="val-bps" id="tblHLBasisBps">-.--</td>
-                  <td class="val-fund muted">N/A</td>
-                  <td class="val-next muted">N/A</td>
+                <tr>
+                  <td>HYPERLIQUID</td>
+                  <td id="tblHLMid">--</td>
+                  <td id="tblHLBasisUsd">--</td>
+                  <td id="tblHLBasisBps">--</td>
+                  <td class="v-dim">--</td>
+                  <td class="v-dim">--</td>
                 </tr>
-                <tr class="venue-row" data-venue="meteora">
-                  <td class="venue-name"><span class="venue-dot meteora"></span>METEORA</td>
-                  <td class="val-mid" id="tblMeteoraMid">-.--</td>
-                  <td class="val-basis" id="tblMeteoraBasisUsd">-.--</td>
-                  <td class="val-bps" id="tblMeteoraBasisBps">-.--</td>
-                  <td class="val-fund muted">N/A</td>
-                  <td class="val-next muted">N/A</td>
+                <tr>
+                  <td>METEORA</td>
+                  <td id="tblMeteoraMid">--</td>
+                  <td id="tblMeteoraBasisUsd">--</td>
+                  <td id="tblMeteoraBasisBps">--</td>
+                  <td class="v-dim">--</td>
+                  <td class="v-dim">--</td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </section>
+        </div>
 
         <!-- Dislocations Panel -->
-        <section class="bb-panel">
-          <div class="bb-panel-header">
-            <span class="bb-panel-num">2</span>
-            <span class="bb-panel-title">DISLOCATIONS</span>
-            <span class="bb-panel-subtitle">Meteora vs Venues</span>
-          </div>
-          <div class="bb-panel-body">
-            <table class="bb-table">
+        <div class="panel">
+          <div class="panel-hdr">[DISLOCATIONS] METEORA vs VENUES</div>
+          <div class="panel-body">
+            <table class="tbl">
               <thead>
                 <tr>
-                  <th class="col-pair">PAIR</th>
-                  <th class="col-delta">Δ USD</th>
-                  <th class="col-delta">Δ BPS</th>
+                  <th>PAIR</th>
+                  <th>Δ $</th>
+                  <th>Δ BPS</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td>METEORA − BINANCE</td>
-                  <td class="val-basis" id="disMetBinUsd">-.--</td>
-                  <td class="val-bps" id="disMetBinBps">-.--</td>
+                  <td id="disMetBinUsd">--</td>
+                  <td id="disMetBinBps">--</td>
                 </tr>
                 <tr>
                   <td>METEORA − HYPERLIQUID</td>
-                  <td class="val-basis" id="disMetHlUsd">-.--</td>
-                  <td class="val-bps" id="disMetHlBps">-.--</td>
+                  <td id="disMetHlUsd">--</td>
+                  <td id="disMetHlBps">--</td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </section>
+        </div>
 
         <!-- Conversion Panel -->
-        <section class="bb-panel">
-          <div class="bb-panel-header">
-            <span class="bb-panel-num">3</span>
-            <span class="bb-panel-title">CONVERSION</span>
-            <span class="bb-panel-subtitle">XAUUSDT → XAUUSDC</span>
-          </div>
-          <div class="bb-panel-body">
-            <table class="bb-table">
+        <div class="panel">
+          <div class="panel-hdr">[CONVERSION] BINANCE XAUUSDT → XAUUSDC</div>
+          <div class="panel-body">
+            <table class="tbl">
               <thead>
                 <tr>
                   <th>XAUUSDT MID</th>
@@ -178,146 +166,136 @@
               </thead>
               <tbody>
                 <tr>
-                  <td id="convXauUsdt" class="val-mid">-.--</td>
-                  <td id="convUsdcUsdt" class="val-mid">-.------</td>
-                  <td id="convXauUsdc" class="val-mid highlight">-.--</td>
+                  <td id="convXauUsdt">--</td>
+                  <td id="convUsdcUsdt">--</td>
+                  <td id="convXauUsdc">--</td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </section>
+        </div>
 
-        <!-- Reference Panel -->
-        <section class="bb-panel bb-panel-ref">
-          <div class="bb-ref-row">
-            <span class="bb-ref-label">REF PRICE (PYTH)</span>
-            <span class="bb-ref-value" id="refPyth">-----.--</span>
+        <!-- Reference Info -->
+        <div class="ref-row">
+          REF (PYTH): <b id="refPyth">--</b>
+          <span class="menu-sep">|</span>
+          PUBLISH: <b id="refPythTime">--</b>
+        </div>
+
+        <!-- Pyth Spot Chart -->
+        <div class="chart-panel">
+          <div class="chart-hdr">
+            <span class="chart-title">[REF] PYTH XAUUSD (SPOT)</span>
+            <div class="chart-legend">
+              <span class="leg"><span class="leg-line pyth"></span>PYTH XAUUSD</span>
+            </div>
           </div>
-          <div class="bb-ref-row">
-            <span class="bb-ref-label">PUBLISH TIME</span>
-            <span class="bb-ref-value" id="refPythTime">-- --- ---- --:--:--</span>
+          <div class="chart-body">
+            <canvas id="pythChart"></canvas>
           </div>
-          <div class="bb-ref-row">
-            <span class="bb-ref-label">LAST UPDATE</span>
-            <span class="bb-ref-value" id="globalUpdated">--s ago</span>
-          </div>
-        </section>
+        </div>
 
       </div>
 
       <!-- Right Column -->
-      <div class="bb-col bb-col-right">
+      <div class="col-right">
         
         <!-- Basis Chart -->
-        <section class="bb-panel bb-panel-chart">
-          <div class="bb-panel-header">
-            <span class="bb-panel-num">4</span>
-            <span class="bb-panel-title">BASIS CHART</span>
-            <span class="bb-panel-subtitle">vs PYTH Reference</span>
-            <div class="bb-legend">
-              <span class="bb-legend-item"><span class="bb-legend-dot binance"></span>BIN</span>
-              <span class="bb-legend-item"><span class="bb-legend-dot hyperliquid"></span>HL</span>
-              <span class="bb-legend-item"><span class="bb-legend-dot meteora"></span>MET</span>
+        <div class="chart-panel">
+          <div class="chart-hdr">
+            <span class="chart-title">[BASIS] vs PYTH (CHART)</span>
+            <div class="chart-legend">
+              <span class="leg"><span class="leg-line binance"></span>BINANCE basis</span>
+              <span class="leg"><span class="leg-line hl"></span>HYPERLIQUID basis</span>
+              <span class="leg"><span class="leg-line meteora"></span>METEORA basis</span>
             </div>
           </div>
-          <div class="bb-chart-container">
+          <div class="chart-body">
             <canvas id="basisChart"></canvas>
           </div>
-        </section>
-
-        <!-- Pyth Spot Chart -->
-        <section class="bb-panel bb-panel-chart">
-          <div class="bb-panel-header">
-            <span class="bb-panel-num">5</span>
-            <span class="bb-panel-title">PYTH XAUUSD SPOT</span>
-            <span class="bb-panel-subtitle">Reference Price</span>
-          </div>
-          <div class="bb-chart-container">
-            <canvas id="pythChart"></canvas>
-          </div>
-        </section>
+        </div>
 
         <!-- Funding Chart -->
-        <section class="bb-panel bb-panel-chart">
-          <div class="bb-panel-header">
-            <span class="bb-panel-num">6</span>
-            <span class="bb-panel-title">FUNDING APY</span>
-            <span class="bb-panel-subtitle">Binance Annualized</span>
+        <div class="chart-panel">
+          <div class="chart-hdr">
+            <span class="chart-title">[FUNDING] BINANCE ANNUALIZED APY</span>
+            <div class="chart-legend">
+              <span class="leg"><span class="leg-line apy"></span>BINANCE APY</span>
+            </div>
           </div>
-          <div class="bb-chart-container">
+          <div class="chart-body">
             <canvas id="fundingChart"></canvas>
           </div>
-        </section>
+        </div>
 
       </div>
 
-    </main>
+    </div>
 
-    <!-- Bottom Diagnostics Panel -->
-    <section class="bb-panel bb-panel-diag">
-      <div class="bb-panel-header">
-        <span class="bb-panel-num">7</span>
-        <span class="bb-panel-title">NETWORK DIAGNOSTICS</span>
-        <span class="bb-panel-subtitle">Feed Health Monitor</span>
-      </div>
-      <div class="bb-panel-body">
-        <table class="bb-table bb-table-diag">
+    <!-- Diagnostics Panel -->
+    <div class="panel diag-panel">
+      <div class="panel-hdr">[DIAG] NETWORK / FEED HEALTH</div>
+      <div class="panel-body">
+        <table class="tbl diag-tbl">
           <thead>
             <tr>
-              <th class="col-feed">FEED</th>
-              <th class="col-status">STATUS</th>
-              <th class="col-age">AGE</th>
-              <th class="col-lat">LATENCY</th>
-              <th class="col-err">LAST ERROR</th>
+              <th style="text-align:left">FEED</th>
+              <th>STATUS</th>
+              <th>AGE</th>
+              <th>LAT</th>
+              <th style="text-align:left">LAST ERROR</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td><span class="feed-dot pyth"></span>PYTH NETWORK</td>
-              <td id="diagPythStatus" class="status-cell">--</td>
+              <td>PYTH</td>
+              <td id="diagPythStatus">--</td>
               <td id="diagPythAge">--</td>
               <td id="diagPythLat">--</td>
-              <td id="diagPythErr" class="err-cell">--</td>
+              <td id="diagPythErr">--</td>
             </tr>
             <tr>
-              <td><span class="feed-dot binance"></span>BINANCE FUTURES</td>
-              <td id="diagBinFStatus" class="status-cell">--</td>
+              <td>BINANCE FUTURES</td>
+              <td id="diagBinFStatus">--</td>
               <td id="diagBinFAge">--</td>
               <td id="diagBinFLat">--</td>
-              <td id="diagBinFErr" class="err-cell">--</td>
+              <td id="diagBinFErr">--</td>
             </tr>
             <tr>
-              <td><span class="feed-dot binance"></span>BINANCE SPOT</td>
-              <td id="diagBinSStatus" class="status-cell">--</td>
+              <td>BINANCE SPOT (USDCUSDT)</td>
+              <td id="diagBinSStatus">--</td>
               <td id="diagBinSAge">--</td>
               <td id="diagBinSLat">--</td>
-              <td id="diagBinSErr" class="err-cell">--</td>
+              <td id="diagBinSErr">--</td>
             </tr>
             <tr>
-              <td><span class="feed-dot hyperliquid"></span>HYPERLIQUID</td>
-              <td id="diagHlStatus" class="status-cell">--</td>
+              <td>HYPERLIQUID</td>
+              <td id="diagHlStatus">--</td>
               <td id="diagHlAge">--</td>
               <td id="diagHlLat">--</td>
-              <td id="diagHlErr" class="err-cell">--</td>
+              <td id="diagHlErr">--</td>
             </tr>
             <tr>
-              <td><span class="feed-dot meteora"></span>METEORA DLMM</td>
-              <td id="diagMetStatus" class="status-cell">--</td>
+              <td>METEORA</td>
+              <td id="diagMetStatus">--</td>
               <td id="diagMetAge">--</td>
               <td id="diagMetLat">--</td>
-              <td id="diagMetErr" class="err-cell">--</td>
+              <td id="diagMetErr">--</td>
             </tr>
           </tbody>
         </table>
       </div>
-    </section>
+      <div class="ref-row" style="border-top:none;color:#444">
+        Tip: If a colleague sees "Failed to fetch", it's almost always network/CORS policy. Raise refresh to 5-10s.
+      </div>
+    </div>
 
-    <!-- Bottom Status Bar -->
-    <footer class="bb-footer">
-      <span class="bb-footer-left">GOLD BASIS TERMINAL v1.0</span>
-      <span class="bb-footer-center">Press F1 for Help • Data provided by Pyth Network, Binance, Hyperliquid, Meteora</span>
-      <span class="bb-footer-right" id="footerTime">--:--:-- UTC</span>
-    </footer>
+    <!-- Footer -->
+    <div class="footer">
+      <span>GOLD BASIS TERMINAL</span>
+      <span>Data: Pyth Network • Binance • Hyperliquid • Meteora</span>
+      <span id="footerTime">--:--:-- UTC</span>
+    </div>
 
   </div>
 
