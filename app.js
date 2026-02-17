@@ -1,403 +1,382 @@
-// ============================================
 // GOLD BASIS TERMINAL
-// ============================================
 
-const PYTH_XAU_USD_ID = "0x765d2ba906dbc32ca17cc11f5310a89e9ee1f6420508c63861f2f8ba4ee34bb2";
-const PYTH_LATEST_URL = "https://hermes.pyth.network/v2/updates/price/latest";
-const BINANCE_BOOK_TICKER = "https://fapi.binance.com/fapi/v1/ticker/bookTicker?symbol=XAUUSDT";
-const BINANCE_PREMIUM_INDEX = "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=XAUUSDT";
-const BINANCE_SPOT_BOOK_TICKER = "https://api.binance.com/api/v3/ticker/bookTicker?symbol=USDCUSDT";
+const PYTH_ID = "0x765d2ba906dbc32ca17cc11f5310a89e9ee1f6420508c63861f2f8ba4ee34bb2";
+const PYTH_URL = "https://hermes.pyth.network/v2/updates/price/latest";
+const BIN_BOOK = "https://fapi.binance.com/fapi/v1/ticker/bookTicker?symbol=XAUUSDT";
+const BIN_PREM = "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=XAUUSDT";
+const BIN_SPOT = "https://api.binance.com/api/v3/ticker/bookTicker?symbol=USDCUSDT";
 const HL_INFO = "https://api.hyperliquid.xyz/info";
-const METEORA_POOL_ADDRESS = "3Vj8miZuTSdonf4W1xLdYFatrXLm38CShrCi7NbZS5Ah";
-const METEORA_POOL_URL = `https://dlmm.datapi.meteora.ag/pools/${METEORA_POOL_ADDRESS}`;
-const STALE_MS = 30_000;
+const MET_URL = "https://dlmm.datapi.meteora.ag/pools/3Vj8miZuTSdonf4W1xLdYFatrXLm38CShrCi7NbZS5Ah";
+const STALE = 30000;
 
-// Safe DOM access
-function $(id) { return document.getElementById(id); }
-function setText(id, t) { const e = $(id); if (e) e.textContent = t; }
+const $ = id => document.getElementById(id);
+const setText = (id, t) => { const e = $(id); if (e) e.textContent = t; };
+const fmtUsd = (x, d=2) => !Number.isFinite(x) ? "—" : "US$" + x.toLocaleString("en-US", {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmtNum = (x, d=2) => !Number.isFinite(x) ? "—" : x.toLocaleString("en-US", {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmtBps = x => !Number.isFinite(x) ? "—" : (x>0?"+":"") + fmtNum(x, 2);
+const fmtPct = (x, d=2) => !Number.isFinite(x) ? "—" : (x>0?"+":"") + fmtNum(x, d) + "%";
+const ageStr = ms => !ms ? "—" : Math.max(0, Math.floor((Date.now()-ms)/1000)) + "s";
+const timeStr = ms => new Date(ms).toLocaleTimeString("en-US", {hour12:false});
+const utcStr = () => new Date().toUTCString().slice(-12, -4);
 
-// Formatting
-const fmtUsd = (x, dp=2) => !Number.isFinite(x) ? "—" : "$" + x.toLocaleString("en-US", {minimumFractionDigits:dp, maximumFractionDigits:dp});
-const fmtNum = (x, dp=2) => !Number.isFinite(x) ? "—" : x.toLocaleString("en-US", {minimumFractionDigits:dp, maximumFractionDigits:dp});
-const fmtBps = (x) => !Number.isFinite(x) ? "—" : (x>0?"+":"") + fmtNum(x,2);
-const fmtPct = (x, dp=2) => !Number.isFinite(x) ? "—" : (x>0?"+":"") + fmtNum(x,dp) + "%";
-const ageText = (ms) => !ms ? "—" : Math.max(0, Math.floor((Date.now()-ms)/1000)) + "s";
-const timeLabel = (ms) => new Date(ms).toLocaleTimeString("en-US", {hour12:false});
-const utcTime = () => { const d=new Date(); return d.toUTCString().slice(-12,-4); };
+const basisUsd = (p, r) => (!Number.isFinite(p)||!Number.isFinite(r)||r===0) ? null : p - r;
+const basisBps = (p, r) => (!Number.isFinite(p)||!Number.isFinite(r)||r===0) ? null : ((p/r)-1)*10000;
+const fundApy = r => !Number.isFinite(r) ? null : (Math.pow(1+r, 1095)-1)*100;
+const stFromAge = ms => !ms ? "ERR" : (Date.now()-ms) > STALE ? "STALE" : "OK";
+const inRange = x => Number.isFinite(x) && x > 100 && x < 10000;
 
-// Calculations
-const basisUsd = (px, ref) => (!Number.isFinite(px)||!Number.isFinite(ref)||ref===0) ? null : px-ref;
-const basisBps = (px, ref) => (!Number.isFinite(px)||!Number.isFinite(ref)||ref===0) ? null : ((px/ref)-1)*10000;
-const fundingApy = (r) => !Number.isFinite(r) ? null : (Math.pow(1+r, 3*365)-1)*100;
-const statusFromAge = (ms) => !ms ? "ERR" : (Date.now()-ms)>STALE_MS ? "STALE" : "OK";
-
-// Meteora helpers
-const inGoldRange = (x) => Number.isFinite(x) && x>100 && x<10000;
-const isGold = (s) => String(s||"").toUpperCase().includes("GOLD") || String(s||"").toUpperCase().includes("XAU");
-const isUsdc = (s) => String(s||"").toUpperCase().includes("USDC");
-
-// Timed fetch
 async function timed(fn) {
   const t0 = performance.now();
-  try {
-    const v = await fn();
-    return { ok:true, v, ms:Math.round(performance.now()-t0), err:"" };
-  } catch(e) {
-    return { ok:false, v:null, ms:Math.round(performance.now()-t0), err:String(e?.message||e) };
-  }
+  try { return { ok:true, v:await fn(), ms:Math.round(performance.now()-t0), err:"" }; }
+  catch(e) { return { ok:false, v:null, ms:Math.round(performance.now()-t0), err:String(e?.message||e) }; }
 }
 
-// Fetchers
-async function fetchPyth() {
-  const res = await fetch(`${PYTH_LATEST_URL}?ids[]=${encodeURIComponent(PYTH_XAU_USD_ID)}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  const p = data?.parsed?.[0];
-  if (!p?.price) throw new Error("Bad response");
+async function getPyth() {
+  const r = await fetch(`${PYTH_URL}?ids[]=${encodeURIComponent(PYTH_ID)}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const d = await r.json(), p = d?.parsed?.[0];
+  if (!p?.price) throw new Error("Bad data");
   const price = Number(p.price.price) * Math.pow(10, Number(p.price.expo));
-  if (!Number.isFinite(price)) throw new Error("Not finite");
-  return { price, publishTimeMs: Number(p.price.publish_time)*1000 };
+  if (!Number.isFinite(price)) throw new Error("NaN");
+  return { price, pubMs: Number(p.price.publish_time)*1000 };
 }
 
-async function fetchBinanceFut() {
-  const [bRes, pRes] = await Promise.all([fetch(BINANCE_BOOK_TICKER), fetch(BINANCE_PREMIUM_INDEX)]);
-  if (!bRes.ok || !pRes.ok) throw new Error("HTTP error");
-  const [book, prem] = await Promise.all([bRes.json(), pRes.json()]);
-  const mid = (Number(book.bidPrice)+Number(book.askPrice))/2;
-  if (!Number.isFinite(mid)) throw new Error("Mid not finite");
-  return { mid, lastFundingRate: Number(prem.lastFundingRate), nextFundingTimeMs: Number(prem.nextFundingTime) };
+async function getBinFut() {
+  const [br, pr] = await Promise.all([fetch(BIN_BOOK), fetch(BIN_PREM)]);
+  if (!br.ok||!pr.ok) throw new Error("HTTP err");
+  const [b, p] = await Promise.all([br.json(), pr.json()]);
+  const mid = (Number(b.bidPrice)+Number(b.askPrice))/2;
+  if (!Number.isFinite(mid)) throw new Error("NaN");
+  return { mid, fundRate: Number(p.lastFundingRate), nextFundMs: Number(p.nextFundingTime) };
 }
 
-async function fetchBinanceSpot() {
-  const res = await fetch(BINANCE_SPOT_BOOK_TICKER);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const j = await res.json();
+async function getBinSpot() {
+  const r = await fetch(BIN_SPOT);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const j = await r.json();
   const mid = (Number(j.bidPrice)+Number(j.askPrice))/2;
-  if (!Number.isFinite(mid)||mid<=0) throw new Error("Mid not finite");
+  if (!Number.isFinite(mid)||mid<=0) throw new Error("NaN");
   return { mid };
 }
 
-async function fetchHL() {
-  const dRes = await fetch(HL_INFO, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({type:"perpDexs"})});
-  if (!dRes.ok) throw new Error("perpDexs error");
-  const dexs = await dRes.json();
-  const dexName = (Array.isArray(dexs)?dexs:[]).find(d=>String(d?.name).toLowerCase()==="flx")?.name || "flx";
-  const mRes = await fetch(HL_INFO, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({type:"allMids",dex:dexName})});
-  if (!mRes.ok) throw new Error("allMids error");
-  const mids = await mRes.json();
+async function getHL() {
+  const dr = await fetch(HL_INFO, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({type:"perpDexs"})});
+  if (!dr.ok) throw new Error("dexs err");
+  const dexs = await dr.json();
+  const dn = (Array.isArray(dexs)?dexs:[]).find(d=>String(d?.name).toLowerCase()==="flx")?.name || "flx";
+  const mr = await fetch(HL_INFO, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({type:"allMids", dex:dn})});
+  if (!mr.ok) throw new Error("mids err");
+  const mids = await mr.json();
   let px = mids?.["GOLD"] ?? mids?.["flx:GOLD"] ?? mids?.["GOLD-USDC"];
-  if (px==null && mids) { const k=Object.keys(mids).find(k=>k.toUpperCase().includes("GOLD")); if(k) px=mids[k]; }
+  if (px==null && mids) { const k = Object.keys(mids).find(k=>k.toUpperCase().includes("GOLD")); if(k) px=mids[k]; }
   const mid = Number(px);
-  if (!Number.isFinite(mid)) throw new Error("Mid not finite");
+  if (!Number.isFinite(mid)) throw new Error("NaN");
   return { mid };
 }
 
-async function fetchMeteora() {
-  const res = await fetch(METEORA_POOL_URL);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const j = await res.json();
+async function getMet() {
+  const r = await fetch(MET_URL);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const j = await r.json();
   const p = Number(j?.current_price);
-  if (!Number.isFinite(p)||p<=0) throw new Error("current_price missing");
+  if (!Number.isFinite(p)||p<=0) throw new Error("No price");
   const inv = 1/p;
-  let mid = p;
-  if (inGoldRange(p) && !inGoldRange(inv)) mid = p;
-  else if (!inGoldRange(p) && inGoldRange(inv)) mid = inv;
-  else if (isGold(j?.token_x?.symbol) && isUsdc(j?.token_y?.symbol)) mid = p;
-  else if (isUsdc(j?.token_x?.symbol) && isGold(j?.token_y?.symbol)) mid = inv;
-  if (!Number.isFinite(mid)) throw new Error("Mid not finite");
+  let mid = inRange(p) ? p : inRange(inv) ? inv : p;
+  if (!Number.isFinite(mid)) throw new Error("NaN");
   return { mid };
 }
 
-// State
-const state = {
-  paused: false, refreshMs: 5000, windowMs: 3600000, unit: "usd", lastTickMs: 0,
-  pyth: {price:NaN, publishTimeMs:0, lastOkMs:0, lastLatMs:0, err:""},
-  binF: {mid:NaN, lastFundingRate:NaN, nextFundingTimeMs:0, lastOkMs:0, lastLatMs:0, err:""},
-  binS: {mid:NaN, lastOkMs:0, lastLatMs:0, err:""},
-  hl: {mid:NaN, lastOkMs:0, lastLatMs:0, err:""},
-  met: {mid:NaN, lastOkMs:0, lastLatMs:0, err:""},
-  points: [], chartBasis:null, chartPyth:null, chartFunding:null, pollTimer:null, uiTimer:null
+const S = {
+  paused:false, refrMs:5000, winMs:3600000, unit:"usd", lastTick:0,
+  pyth:{price:NaN, pubMs:0, okMs:0, latMs:0, err:""},
+  binF:{mid:NaN, fundRate:NaN, nextFundMs:0, okMs:0, latMs:0, err:""},
+  binS:{mid:NaN, okMs:0, latMs:0, err:""},
+  hl:{mid:NaN, okMs:0, latMs:0, err:""},
+  met:{mid:NaN, okMs:0, latMs:0, err:""},
+  pts:[], cBasis:null, cPyth:null, cFund:null
 };
 
-// UI Painting
-function paintHeader() {
-  setText("topTime", utcTime());
-  setText("footerTime", utcTime() + " UTC");
-  const px = state.pyth.price;
-  setText("headerPrice", Number.isFinite(px) ? fmtUsd(px,2) : "-----.--");
-  
+function paintHdr() {
+  setText("topTime", utcStr());
+  setText("footTime", utcStr() + " UTC");
+  const px = S.pyth.price;
+  setText("hdrPrice", Number.isFinite(px) ? fmtUsd(px,2) : "US$-----.--");
   let chg=NaN, pct=NaN;
-  if (state.points.length>=2) {
-    const p1=state.points[state.points.length-1]?.pyth, p0=state.points[0]?.pyth;
-    if (Number.isFinite(p1)&&Number.isFinite(p0)) { chg=p1-p0; pct=p0?chg/p0*100:NaN; }
+  if (S.pts.length>=2) {
+    const p1=S.pts[S.pts.length-1]?.pyth, p0=S.pts[0]?.pyth;
+    if (Number.isFinite(p1)&&Number.isFinite(p0)) { chg=p1-p0; pct=p0?(chg/p0)*100:NaN; }
   }
-  const chgEl=$("headerChange"), pctEl=$("headerChangePct");
-  if (chgEl) {
-    chgEl.textContent = Number.isFinite(chg) ? (chg>0?"+":"")+fmtNum(chg,2) : "--.--";
-    chgEl.className = "change " + (chg>0?"up":chg<0?"down":"");
-  }
-  if (pctEl) pctEl.textContent = Number.isFinite(pct) ? "("+fmtPct(pct,2)+")" : "(--.--%)";
+  const ce=$("hdrChg"), pe=$("hdrPct");
+  if(ce){ ce.textContent = Number.isFinite(chg) ? (chg>0?"+":"")+fmtNum(chg,2) : "--.--"; ce.className = chg>0?"chg-up":chg<0?"chg-dn":""; }
+  if(pe) pe.textContent = Number.isFinite(pct) ? "("+fmtPct(pct,2)+")" : "(--.--%)"
 }
 
 function paintStatus() {
-  const now = Date.now();
-  const pOk = state.pyth.lastOkMs && (now-state.pyth.lastOkMs)<=STALE_MS;
-  const dot=$("statusDot"), txt=$("statusText");
-  if (dot) { dot.className = "status-dot " + (state.paused?"warn":pOk?"ok":"err"); }
-  if (txt) { txt.textContent = state.paused?"PAUSED":pOk?"LIVE":"ERROR"; }
-  setText("globalUpdated", state.lastTickMs ? ageText(state.lastTickMs)+" ago" : "--");
+  const ok = S.pyth.okMs && (Date.now()-S.pyth.okMs)<=STALE;
+  const dot=$("statusDot"), txt=$("statusTxt");
+  if(dot){ dot.className = "dot " + (S.paused?"warn":ok?"":"err"); }
+  if(txt) txt.textContent = S.paused?"PAUSED":ok?"LIVE":"ERROR";
+  setText("updAge", S.lastTick ? ageStr(S.lastTick)+" ago" : "--");
 }
 
-function paintError() {
-  const errs = [state.pyth.err, state.binF.err, state.binS.err, state.hl.err, state.met.err].filter(Boolean);
-  setText("globalError", errs.join(" • "));
+function paintErr() {
+  const errs = [S.pyth.err, S.binF.err, S.binS.err, S.hl.err, S.met.err].filter(Boolean);
+  setText("errMsg", errs.join(" • "));
 }
 
-function setValClass(id, val) {
-  const el = $(id);
-  if (!el) return;
-  el.classList.remove("v-pos","v-neg");
-  if (Number.isFinite(val)) el.classList.add(val>0?"v-pos":"v-neg");
+function setVC(id, v) {
+  const e=$(id); if(!e) return;
+  e.classList.remove("pos","neg");
+  if(Number.isFinite(v)) e.classList.add(v>0?"pos":"neg");
 }
 
-function paintSnapshot() {
-  const ref = state.pyth.price;
-  setText("refPyth", fmtUsd(ref,2));
-  setText("refPythTime", state.pyth.publishTimeMs ? new Date(state.pyth.publishTimeMs).toLocaleString() : "—");
+function paintSnap() {
+  const ref = S.pyth.price;
 
-  // Binance
-  const bU=basisUsd(state.binF.mid,ref), bB=basisBps(state.binF.mid,ref);
-  setText("tblBinanceMid", fmtUsd(state.binF.mid,2));
-  setText("tblBinanceBasisUsd", bU!=null?fmtUsd(bU,2):"—"); setValClass("tblBinanceBasisUsd",bU);
-  setText("tblBinanceBasisBps", bB!=null?fmtBps(bB):"—"); setValClass("tblBinanceBasisBps",bB);
-  setText("tblBinanceFunding", Number.isFinite(state.binF.lastFundingRate)?fmtPct(state.binF.lastFundingRate*100,4):"—");
-  setText("tblBinanceNextFunding", state.binF.nextFundingTimeMs?new Date(state.binF.nextFundingTimeMs).toLocaleTimeString():"—");
+  const bU=basisUsd(S.binF.mid,ref), bB=basisBps(S.binF.mid,ref);
+  setText("binMid", fmtUsd(S.binF.mid,2));
+  setText("binBasisUsd", bU!=null?fmtUsd(bU,2):"—"); setVC("binBasisUsd",bU);
+  setText("binBasisBps", bB!=null?fmtBps(bB):"—"); setVC("binBasisBps",bB);
+  setText("binFund", Number.isFinite(S.binF.fundRate)?fmtPct(S.binF.fundRate*100,4):"—");
+  setText("binNext", S.binF.nextFundMs?timeStr(S.binF.nextFundMs):"—");
 
-  // HL
-  const hU=basisUsd(state.hl.mid,ref), hB=basisBps(state.hl.mid,ref);
-  setText("tblHLMid", fmtUsd(state.hl.mid,2));
-  setText("tblHLBasisUsd", hU!=null?fmtUsd(hU,2):"—"); setValClass("tblHLBasisUsd",hU);
-  setText("tblHLBasisBps", hB!=null?fmtBps(hB):"—"); setValClass("tblHLBasisBps",hB);
+  const hU=basisUsd(S.hl.mid,ref), hB=basisBps(S.hl.mid,ref);
+  setText("hlMid", fmtUsd(S.hl.mid,2));
+  setText("hlBasisUsd", hU!=null?fmtUsd(hU,2):"—"); setVC("hlBasisUsd",hU);
+  setText("hlBasisBps", hB!=null?fmtBps(hB):"—"); setVC("hlBasisBps",hB);
 
-  // Meteora
-  const mU=basisUsd(state.met.mid,ref), mB=basisBps(state.met.mid,ref);
-  setText("tblMeteoraMid", fmtUsd(state.met.mid,2));
-  setText("tblMeteoraBasisUsd", mU!=null?fmtUsd(mU,2):"—"); setValClass("tblMeteoraBasisUsd",mU);
-  setText("tblMeteoraBasisBps", mB!=null?fmtBps(mB):"—"); setValClass("tblMeteoraBasisBps",mB);
+  const mU=basisUsd(S.met.mid,ref), mB=basisBps(S.met.mid,ref);
+  setText("metMid", fmtUsd(S.met.mid,2));
+  setText("metBasisUsd", mU!=null?fmtUsd(mU,2):"—"); setVC("metBasisUsd",mU);
+  setText("metBasisBps", mB!=null?fmtBps(mB):"—"); setVC("metBasisBps",mB);
 
   // Dislocations
-  const dBu=(Number.isFinite(state.met.mid)&&Number.isFinite(state.binF.mid))?(state.met.mid-state.binF.mid):null;
-  const dBb=(dBu!=null&&state.binF.mid)?((state.met.mid/state.binF.mid)-1)*10000:null;
-  setText("disMetBinUsd", dBu!=null?fmtUsd(dBu,2):"—"); setValClass("disMetBinUsd",dBu);
-  setText("disMetBinBps", dBb!=null?fmtBps(dBb):"—"); setValClass("disMetBinBps",dBb);
+  const dBu=(Number.isFinite(S.met.mid)&&Number.isFinite(S.binF.mid))?(S.met.mid-S.binF.mid):null;
+  const dBb=dBu!=null&&S.binF.mid?((S.met.mid/S.binF.mid)-1)*10000:null;
+  setText("dislMBusd", dBu!=null?fmtUsd(dBu,2):"—"); setVC("dislMBusd",dBu);
+  setText("dislMBbps", dBb!=null?fmtBps(dBb):"—"); setVC("dislMBbps",dBb);
 
-  const dHu=(Number.isFinite(state.met.mid)&&Number.isFinite(state.hl.mid))?(state.met.mid-state.hl.mid):null;
-  const dHb=(dHu!=null&&state.hl.mid)?((state.met.mid/state.hl.mid)-1)*10000:null;
-  setText("disMetHlUsd", dHu!=null?fmtUsd(dHu,2):"—"); setValClass("disMetHlUsd",dHu);
-  setText("disMetHlBps", dHb!=null?fmtBps(dHb):"—"); setValClass("disMetHlBps",dHb);
+  const dHu=(Number.isFinite(S.met.mid)&&Number.isFinite(S.hl.mid))?(S.met.mid-S.hl.mid):null;
+  const dHb=dHu!=null&&S.hl.mid?((S.met.mid/S.hl.mid)-1)*10000:null;
+  setText("dislMHusd", dHu!=null?fmtUsd(dHu,2):"—"); setVC("dislMHusd",dHu);
+  setText("dislMHbps", dHb!=null?fmtBps(dHb):"—"); setVC("dislMHbps",dHb);
 
   // Conversion
-  setText("convXauUsdt", fmtUsd(state.binF.mid,2));
-  setText("convUsdcUsdt", fmtNum(state.binS.mid,6));
-  const implied = (Number.isFinite(state.binF.mid)&&Number.isFinite(state.binS.mid)&&state.binS.mid>0) ? state.binF.mid/state.binS.mid : NaN;
-  setText("convXauUsdc", fmtUsd(implied,2));
+  setText("convXauUsdt", fmtUsd(S.binF.mid,2));
+  setText("convUsdcUsdt", fmtNum(S.binS.mid,6));
+  const impl = (Number.isFinite(S.binF.mid)&&Number.isFinite(S.binS.mid)&&S.binS.mid>0) ? S.binF.mid/S.binS.mid : NaN;
+  setText("convImplied", fmtUsd(impl,2));
 }
 
-function paintDiagRow(pre, feed) {
-  const st = feed.err ? "ERR" : statusFromAge(feed.lastOkMs);
-  const el = $(pre+"Status");
-  if (el) {
-    el.textContent = st;
-    el.className = st==="OK"?"st-ok":st==="STALE"?"st-warn":"st-err";
-  }
-  setText(pre+"Age", feed.lastOkMs ? ageText(feed.lastOkMs) : "—");
-  setText(pre+"Lat", feed.lastLatMs ? feed.lastLatMs+"ms" : "—");
-  setText(pre+"Err", feed.err ? feed.err.slice(0,80) : "—");
+function paintDiagRow(pre, f) {
+  const st = f.err ? "ERR" : stFromAge(f.okMs);
+  const e = $(pre+"St");
+  if(e){ e.textContent=st; e.className=st==="OK"?"st-ok":st==="STALE"?"st-wrn":"st-err"; }
+  setText(pre+"Age", f.okMs ? ageStr(f.okMs) : "—");
+  setText(pre+"Lat", f.latMs ? f.latMs+"ms" : "—");
+  setText(pre+"Err", f.err ? f.err.slice(0,60) : "—");
 }
 
 function paintDiag() {
-  paintDiagRow("diagPyth", state.pyth);
-  paintDiagRow("diagBinF", state.binF);
-  paintDiagRow("diagBinS", state.binS);
-  paintDiagRow("diagHl", state.hl);
-  paintDiagRow("diagMet", state.met);
+  paintDiagRow("dPyth", S.pyth);
+  paintDiagRow("dBinF", S.binF);
+  paintDiagRow("dHl", S.hl);
+  paintDiagRow("dMet", S.met);
 }
 
-// Charts
 function buildCharts() {
   if (typeof Chart === "undefined") return;
 
-  const gridColor = "rgba(30,30,30,1)";
-  const tickColor = "#555";
-  const defaults = {
-    responsive:true, maintainAspectRatio:false, animation:false,
-    plugins:{legend:{display:false}},
-    scales:{
-      x:{ticks:{color:tickColor,maxRotation:0,autoSkip:true,maxTicksLimit:8,font:{size:9}},grid:{color:gridColor}},
-      y:{ticks:{color:tickColor,font:{size:9}},grid:{color:gridColor}}
+  // Bloomberg chart style: white axes, dotted white grid lines, black background
+  const chartOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: {
+        ticks: { color: "#ffffff", maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { size: 9, family: "Consolas, monospace" } },
+        grid: { color: "rgba(255,255,255,0.15)", borderColor: "#ffffff", borderDash: [2, 2] },
+        border: { color: "#ffffff" }
+      },
+      y: {
+        ticks: { color: "#ffffff", font: { size: 9, family: "Consolas, monospace" } },
+        grid: { color: "rgba(255,255,255,0.15)", borderColor: "#ffffff", borderDash: [2, 2] },
+        border: { color: "#ffffff" }
+      }
     }
   };
 
-  const basisCtx = $("basisChart")?.getContext("2d");
+  const basisCtx = $("chartBasis")?.getContext("2d");
   if (basisCtx) {
-    state.chartBasis = new Chart(basisCtx, {
-      type:"line",
-      data:{labels:[],datasets:[
-        {label:"BINANCE",data:[],borderWidth:1.5,pointRadius:0,tension:0.2,borderColor:"#ff8c00"},
-        {label:"HYPERLIQUID",data:[],borderWidth:1.5,pointRadius:0,tension:0.2,borderColor:"#00aa00"},
-        {label:"METEORA",data:[],borderWidth:1.5,pointRadius:0,tension:0.2,borderColor:"#aa00aa"}
+    S.cBasis = new Chart(basisCtx, {
+      type: "line",
+      data: { labels: [], datasets: [
+        { label:"BIN", data:[], borderWidth:1.5, pointRadius:0, tension:0.2, borderColor:"#ff9900" },
+        { label:"HL", data:[], borderWidth:1.5, pointRadius:0, tension:0.2, borderColor:"#00ff00" },
+        { label:"MET", data:[], borderWidth:1.5, pointRadius:0, tension:0.2, borderColor:"#ff00ff" }
       ]},
-      options:{...defaults}
+      options: chartOpts
     });
   }
 
-  const pythCtx = $("pythChart")?.getContext("2d");
+  const pythCtx = $("chartPyth")?.getContext("2d");
   if (pythCtx) {
-    state.chartPyth = new Chart(pythCtx, {
-      type:"line",
-      data:{labels:[],datasets:[
-        {label:"PYTH",data:[],borderWidth:1.5,pointRadius:0,tension:0.2,borderColor:"#ff8c00"}
+    S.cPyth = new Chart(pythCtx, {
+      type: "line",
+      data: { labels: [], datasets: [
+        { label:"PYTH", data:[], borderWidth:1.5, pointRadius:0, tension:0.2, borderColor:"#ff9900" }
       ]},
-      options:{...defaults}
+      options: chartOpts
     });
   }
 
-  const fundCtx = $("fundingChart")?.getContext("2d");
+  const fundCtx = $("chartFund")?.getContext("2d");
   if (fundCtx) {
-    state.chartFunding = new Chart(fundCtx, {
-      type:"line",
-      data:{labels:[],datasets:[
-        {label:"APY",data:[],borderWidth:1.5,pointRadius:0,tension:0.2,borderColor:"#00aaaa"}
+    S.cFund = new Chart(fundCtx, {
+      type: "line",
+      data: { labels: [], datasets: [
+        { label:"APY", data:[], borderWidth:1.5, pointRadius:0, tension:0.2, borderColor:"#00ffff" }
       ]},
-      options:{...defaults,scales:{...defaults.scales,y:{...defaults.scales.y,ticks:{...defaults.scales.y.ticks,callback:v=>v+"%"}}}}
+      options: {
+        ...chartOpts,
+        scales: {
+          ...chartOpts.scales,
+          y: { ...chartOpts.scales.y, ticks: { ...chartOpts.scales.y.ticks, callback: v => v.toFixed(2)+"%" } }
+        }
+      }
     });
   }
 }
 
-function prunePoints() {
-  const cutoff = Date.now() - state.windowMs;
-  state.points = state.points.filter(p => p.t >= cutoff);
+function prune() {
+  const cut = Date.now() - S.winMs;
+  S.pts = S.pts.filter(p => p.t >= cut);
 }
 
 function syncCharts() {
-  prunePoints();
-  const labels = state.points.map(p => timeLabel(p.t));
+  prune();
+  const labels = S.pts.map(p => timeStr(p.t));
 
-  if (state.chartBasis) {
-    state.chartBasis.data.labels = labels;
-    state.chartBasis.data.datasets[0].data = state.points.map(p => state.unit==="usd"?p.binUsd:p.binBps);
-    state.chartBasis.data.datasets[1].data = state.points.map(p => state.unit==="usd"?p.hlUsd:p.hlBps);
-    state.chartBasis.data.datasets[2].data = state.points.map(p => state.unit==="usd"?p.metUsd:p.metBps);
-    state.chartBasis.update("none");
+  if (S.cBasis) {
+    S.cBasis.data.labels = labels;
+    S.cBasis.data.datasets[0].data = S.pts.map(p => S.unit==="usd"?p.binUsd:p.binBps);
+    S.cBasis.data.datasets[1].data = S.pts.map(p => S.unit==="usd"?p.hlUsd:p.hlBps);
+    S.cBasis.data.datasets[2].data = S.pts.map(p => S.unit==="usd"?p.metUsd:p.metBps);
+    S.cBasis.update("none");
   }
 
-  if (state.chartPyth) {
-    state.chartPyth.data.labels = labels;
-    state.chartPyth.data.datasets[0].data = state.points.map(p => p.pyth);
-    state.chartPyth.update("none");
+  if (S.cPyth) {
+    S.cPyth.data.labels = labels;
+    S.cPyth.data.datasets[0].data = S.pts.map(p => p.pyth);
+    S.cPyth.update("none");
   }
 
-  if (state.chartFunding) {
-    state.chartFunding.data.labels = labels;
-    state.chartFunding.data.datasets[0].data = state.points.map(p => p.apyPct);
-    state.chartFunding.update("none");
+  if (S.cFund) {
+    S.cFund.data.labels = labels;
+    S.cFund.data.datasets[0].data = S.pts.map(p => p.apy);
+    S.cFund.update("none");
   }
 }
 
-// Main tick
 async function tick() {
-  if (state.paused) return;
-  const started = Date.now();
-  state.lastTickMs = started;
+  if (S.paused) return;
+  const now = Date.now();
+  S.lastTick = now;
 
-  const [p,bf,bs,hl,met] = await Promise.all([timed(fetchPyth),timed(fetchBinanceFut),timed(fetchBinanceSpot),timed(fetchHL),timed(fetchMeteora)]);
+  const [rP, rBF, rBS, rHL, rM] = await Promise.all([timed(getPyth), timed(getBinFut), timed(getBinSpot), timed(getHL), timed(getMet)]);
 
-  if (p.ok) { state.pyth.price=p.v.price; state.pyth.publishTimeMs=p.v.publishTimeMs; state.pyth.lastOkMs=started; state.pyth.err=""; }
-  else state.pyth.err="PYTH: "+p.err;
-  state.pyth.lastLatMs=p.ms;
+  if (rP.ok) { S.pyth.price=rP.v.price; S.pyth.pubMs=rP.v.pubMs; S.pyth.okMs=now; S.pyth.err=""; }
+  else S.pyth.err="PYTH: "+rP.err;
+  S.pyth.latMs=rP.ms;
 
-  if (bf.ok) { state.binF.mid=bf.v.mid; state.binF.lastFundingRate=bf.v.lastFundingRate; state.binF.nextFundingTimeMs=bf.v.nextFundingTimeMs; state.binF.lastOkMs=started; state.binF.err=""; }
-  else state.binF.err="BINANCE FUT: "+bf.err;
-  state.binF.lastLatMs=bf.ms;
+  if (rBF.ok) { S.binF.mid=rBF.v.mid; S.binF.fundRate=rBF.v.fundRate; S.binF.nextFundMs=rBF.v.nextFundMs; S.binF.okMs=now; S.binF.err=""; }
+  else S.binF.err="BINANCE: "+rBF.err;
+  S.binF.latMs=rBF.ms;
 
-  if (bs.ok) { state.binS.mid=bs.v.mid; state.binS.lastOkMs=started; state.binS.err=""; }
-  else state.binS.err="BINANCE SPOT: "+bs.err;
-  state.binS.lastLatMs=bs.ms;
+  if (rBS.ok) { S.binS.mid=rBS.v.mid; S.binS.okMs=now; S.binS.err=""; }
+  else S.binS.err="BIN SPOT: "+rBS.err;
+  S.binS.latMs=rBS.ms;
 
-  if (hl.ok) { state.hl.mid=hl.v.mid; state.hl.lastOkMs=started; state.hl.err=""; }
-  else state.hl.err="HL: "+hl.err;
-  state.hl.lastLatMs=hl.ms;
+  if (rHL.ok) { S.hl.mid=rHL.v.mid; S.hl.okMs=now; S.hl.err=""; }
+  else S.hl.err="HL: "+rHL.err;
+  S.hl.latMs=rHL.ms;
 
-  if (met.ok) { state.met.mid=met.v.mid; state.met.lastOkMs=started; state.met.err=""; }
-  else state.met.err="METEORA: "+met.err;
-  state.met.lastLatMs=met.ms;
+  if (rM.ok) { S.met.mid=rM.v.mid; S.met.okMs=now; S.met.err=""; }
+  else S.met.err="METEORA: "+rM.err;
+  S.met.latMs=rM.ms;
 
-  const ref = state.pyth.price;
-  state.points.push({
-    t:started, pyth:Number.isFinite(ref)?ref:null,
-    binUsd:basisUsd(state.binF.mid,ref), binBps:basisBps(state.binF.mid,ref),
-    hlUsd:basisUsd(state.hl.mid,ref), hlBps:basisBps(state.hl.mid,ref),
-    metUsd:basisUsd(state.met.mid,ref), metBps:basisBps(state.met.mid,ref),
-    apyPct:fundingApy(state.binF.lastFundingRate)
+  const ref = S.pyth.price;
+  S.pts.push({
+    t: now,
+    pyth: Number.isFinite(ref) ? ref : null,
+    binUsd: basisUsd(S.binF.mid, ref),
+    binBps: basisBps(S.binF.mid, ref),
+    hlUsd: basisUsd(S.hl.mid, ref),
+    hlBps: basisBps(S.hl.mid, ref),
+    metUsd: basisUsd(S.met.mid, ref),
+    metBps: basisBps(S.met.mid, ref),
+    apy: fundApy(S.binF.fundRate)
   });
 
-  paintError(); paintStatus(); paintHeader(); paintSnapshot(); paintDiag(); syncCharts();
+  paintErr(); paintStatus(); paintHdr(); paintSnap(); paintDiag(); syncCharts();
 }
 
+let pollTimer, uiTimer;
+
 function startPoll() {
-  if (state.pollTimer) clearInterval(state.pollTimer);
-  state.pollTimer = setInterval(tick, state.refreshMs);
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(tick, S.refrMs);
 }
 
 function startUi() {
-  if (state.uiTimer) clearInterval(state.uiTimer);
-  state.uiTimer = setInterval(() => { paintHeader(); paintStatus(); paintDiag(); }, 1000);
+  if (uiTimer) clearInterval(uiTimer);
+  uiTimer = setInterval(() => { paintHdr(); paintStatus(); paintDiag(); }, 1000);
 }
 
 function wire() {
-  $("refreshSelect")?.addEventListener("change", e => { state.refreshMs=Number(e.target.value); startPoll(); });
-  $("windowSelect")?.addEventListener("change", e => { state.windowMs=Number(e.target.value); prunePoints(); syncCharts(); });
-  
-  $("unitUsdBtn")?.addEventListener("click", () => {
-    state.unit="usd";
-    $("unitUsdBtn")?.classList.add("active");
-    $("unitBpsBtn")?.classList.remove("active");
+  $("selRefr")?.addEventListener("change", e => { S.refrMs = Number(e.target.value); startPoll(); });
+  $("selWin")?.addEventListener("change", e => { S.winMs = Number(e.target.value); prune(); syncCharts(); });
+
+  $("btnUsd")?.addEventListener("click", () => {
+    S.unit = "usd";
+    $("btnUsd")?.classList.add("on");
+    $("btnBps")?.classList.remove("on");
     syncCharts();
   });
-  
-  $("unitBpsBtn")?.addEventListener("click", () => {
-    state.unit="bps";
-    $("unitBpsBtn")?.classList.add("active");
-    $("unitUsdBtn")?.classList.remove("active");
+
+  $("btnBps")?.addEventListener("click", () => {
+    S.unit = "bps";
+    $("btnBps")?.classList.add("on");
+    $("btnUsd")?.classList.remove("on");
     syncCharts();
   });
-  
-  $("pauseBtn")?.addEventListener("click", () => {
-    state.paused=true;
-    $("pauseBtn").disabled=true;
-    $("resumeBtn").disabled=false;
+
+  $("btnPause")?.addEventListener("click", () => {
+    S.paused = true;
+    $("btnPause").disabled = true;
+    $("btnResume").disabled = false;
     paintStatus();
   });
-  
-  $("resumeBtn")?.addEventListener("click", () => {
-    state.paused=false;
-    $("pauseBtn").disabled=false;
-    $("resumeBtn").disabled=true;
+
+  $("btnResume")?.addEventListener("click", () => {
+    S.paused = false;
+    $("btnPause").disabled = false;
+    $("btnResume").disabled = true;
     tick();
     paintStatus();
   });
 }
 
-// Boot
 (function init() {
-  if (document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();
 
 function boot() {
   wire();
   buildCharts();
-  paintHeader();
+  paintHdr();
   paintStatus();
   tick();
   startPoll();
