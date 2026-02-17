@@ -1,6 +1,6 @@
 // Gold Basis Dashboard - Modern Clean Version
-
 // ============================================
+
 // CONFIGURATION
 // ============================================
 const CONFIG = {
@@ -14,23 +14,34 @@ const CONFIG = {
   STALE_MS: 30000
 };
 
-// Colors matching CSS
+// Pull colors from CSS variables so the dashboard theme is the source of truth
+const cssVar = (name, fallback) => {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+};
+
 const COLORS = {
-  binance: '#d29922',
-  hl: '#3fb950',
-  meteora: '#a371f7',
-  pyth: '#d29922',
-  funding: '#39c5cf',
-  grid: 'rgba(240, 246, 252, 0.06)',
-  text: '#7d8590',
-  textLight: '#e6edf3'
+  binance: cssVar('--chart-binance', '#f2b84b'),
+  hl: cssVar('--chart-hl', '#2ee59d'),
+  meteora: cssVar('--chart-meteora', '#b38cff'),
+  pyth: cssVar('--chart-pyth', '#f2b84b'),
+  funding: cssVar('--chart-funding', '#4ed6e0'),
+  grid: 'rgba(255, 255, 255, 0.06)',
+  text: 'rgba(210, 220, 238, 0.62)',
+  textLight: 'rgba(242, 246, 255, 0.92)',
+  tooltipBg: 'rgba(14, 20, 31, 0.92)',
+  tooltipBorder: 'rgba(255, 255, 255, 0.10)'
 };
 
 // ============================================
 // UTILITIES
 // ============================================
 const $ = id => document.getElementById(id);
-const setText = (id, text) => { const el = $(id); if (el) el.textContent = text; };
+
+const setText = (id, text) => {
+  const el = $(id);
+  if (el) el.textContent = text;
+};
 
 const formatUsd = (n, decimals = 2) => {
   if (!Number.isFinite(n)) return '--';
@@ -75,22 +86,16 @@ const state = {
   windowMs: 3600000,
   unit: 'usd',
   lastTick: 0,
-  
+
   pyth: { price: NaN, pubMs: 0, okMs: 0, latMs: 0, err: '' },
   binF: { mid: NaN, fundRate: NaN, nextFundMs: 0, okMs: 0, latMs: 0, err: '' },
   binS: { mid: NaN, okMs: 0, latMs: 0, err: '' },
   hl: { mid: NaN, okMs: 0, latMs: 0, err: '' },
   met: { mid: NaN, okMs: 0, latMs: 0, err: '' },
-  
+
   points: [],
   prevPrice: NaN,
-  
-  charts: {
-    pyth: null,
-    basis: null,
-    disloc: null,
-    funding: null
-  }
+  charts: { pyth: null, basis: null, disloc: null, funding: null }
 };
 
 // ============================================
@@ -144,15 +149,15 @@ async function fetchHyperliquid() {
   if (!dexRes.ok) throw new Error('Dex fetch failed');
   const dexs = await dexRes.json();
   const dexName = (Array.isArray(dexs) ? dexs : []).find(d => String(d?.name).toLowerCase() === 'flx')?.name || 'flx';
-  
+
   const midsRes = await fetch(CONFIG.HL_INFO, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'allMids', dex: dexName })
   });
   if (!midsRes.ok) throw new Error('Mids fetch failed');
+
   const mids = await midsRes.json();
-  
   let price = mids?.['GOLD'] ?? mids?.['flx:GOLD'] ?? mids?.['GOLD-USDC'];
   if (price == null && mids) {
     const key = Object.keys(mids).find(k => k.toUpperCase().includes('GOLD'));
@@ -181,21 +186,22 @@ async function fetchMeteora() {
 function updateHeader() {
   const price = state.pyth.price;
   const priceEl = $('price');
-  
+
   // Animate price changes
   if (priceEl && Number.isFinite(price)) {
     const newText = formatUsd(price, 2);
     if (priceEl.textContent !== newText) {
       priceEl.textContent = newText;
+
       if (Number.isFinite(state.prevPrice)) {
         priceEl.classList.remove('value-flash-up', 'value-flash-down');
-        void priceEl.offsetWidth; // Force reflow
+        void priceEl.offsetWidth;
         priceEl.classList.add(price > state.prevPrice ? 'value-flash-up' : 'value-flash-down');
       }
     }
   }
-  
-  // Calculate change from first point in window
+
+  // Change from first point in window
   let change = NaN, changePct = NaN;
   if (state.points.length >= 2) {
     const first = state.points[0]?.pyth;
@@ -205,11 +211,11 @@ function updateHeader() {
       changePct = (change / first) * 100;
     }
   }
-  
+
   const changeEl = $('change');
   const changeValEl = $('changeVal');
   const changePctEl = $('changePct');
-  
+
   if (changeEl && changeValEl && changePctEl) {
     changeEl.classList.remove('positive', 'negative');
     if (Number.isFinite(change)) {
@@ -221,42 +227,38 @@ function updateHeader() {
       changePctEl.textContent = '(--)';
     }
   }
-  
+
   setText('updatedText', `Updated ${timeAgo(state.lastTick)}`);
 }
 
 function updateStatus() {
   const now = Date.now();
   const pythOk = state.pyth.okMs && (now - state.pyth.okMs) <= CONFIG.STALE_MS;
-  const allOk = pythOk && 
+  const allOk = pythOk &&
     state.binF.okMs && (now - state.binF.okMs) <= CONFIG.STALE_MS &&
     state.hl.okMs && (now - state.hl.okMs) <= CONFIG.STALE_MS &&
     state.met.okMs && (now - state.met.okMs) <= CONFIG.STALE_MS;
-  
+
   const dot = $('statusDot');
   const text = $('statusText');
   const indicator = dot?.parentElement;
-  
+
   if (dot && text && indicator) {
     dot.classList.remove('warning', 'error');
     text.classList.remove('warning', 'error');
-    indicator.style.background = '';
-    
+
     if (state.paused) {
       dot.classList.add('warning');
       text.classList.add('warning');
       text.textContent = 'PAUSED';
-      indicator.style.background = 'rgba(210, 153, 34, 0.15)';
     } else if (!pythOk) {
       dot.classList.add('error');
       text.classList.add('error');
       text.textContent = 'ERROR';
-      indicator.style.background = 'rgba(248, 81, 73, 0.15)';
     } else if (!allOk) {
       dot.classList.add('warning');
       text.classList.add('warning');
       text.textContent = 'PARTIAL';
-      indicator.style.background = 'rgba(210, 153, 34, 0.15)';
     } else {
       text.textContent = 'LIVE';
     }
@@ -271,16 +273,13 @@ function updateFeedStatus() {
     { id: 'feedHL', okMs: state.hl.okMs },
     { id: 'feedMeteora', okMs: state.met.okMs }
   ];
-  
+
   feeds.forEach(feed => {
     const el = $(feed.id);
     if (el) {
       el.classList.remove('warn', 'err');
-      if (!feed.okMs) {
-        el.classList.add('err');
-      } else if (now - feed.okMs > CONFIG.STALE_MS) {
-        el.classList.add('warn');
-      }
+      if (!feed.okMs) el.classList.add('err');
+      else if (now - feed.okMs > CONFIG.STALE_MS) el.classList.add('warn');
     }
   });
 }
@@ -299,13 +298,14 @@ function setValueClass(id, value) {
   if (!el) return;
   el.classList.remove('value-positive', 'value-negative');
   if (Number.isFinite(value)) {
-    el.classList.add(value > 0 ? 'value-positive' : value < 0 ? 'value-negative' : '');
+    if (value > 0) el.classList.add('value-positive');
+    else if (value < 0) el.classList.add('value-negative');
   }
 }
 
 function updatePriceMatrix() {
   const ref = state.pyth.price;
-  
+
   // Binance
   const binBasisU = basisUsd(state.binF.mid, ref);
   const binBasisB = basisBps(state.binF.mid, ref);
@@ -316,7 +316,7 @@ function updatePriceMatrix() {
   setValueClass('binBasisBps', binBasisB);
   setText('binFund', Number.isFinite(state.binF.fundRate) ? formatPct(state.binF.fundRate * 100, 4) : '--');
   setText('binNext', state.binF.nextFundMs ? formatTime(state.binF.nextFundMs) : '--');
-  
+
   // Hyperliquid
   const hlBasisU = basisUsd(state.hl.mid, ref);
   const hlBasisB = basisBps(state.hl.mid, ref);
@@ -325,7 +325,7 @@ function updatePriceMatrix() {
   setText('hlBasisBps', hlBasisB != null ? formatBps(hlBasisB) : '--');
   setValueClass('hlBasisUsd', hlBasisU);
   setValueClass('hlBasisBps', hlBasisB);
-  
+
   // Meteora
   const metBasisU = basisUsd(state.met.mid, ref);
   const metBasisB = basisBps(state.met.mid, ref);
@@ -334,45 +334,37 @@ function updatePriceMatrix() {
   setText('metBasisBps', metBasisB != null ? formatBps(metBasisB) : '--');
   setValueClass('metBasisUsd', metBasisU);
   setValueClass('metBasisBps', metBasisB);
-  
+
   // Conversion stats
   setText('usdcMid', formatNum(state.binS.mid, 6));
-  const implied = (Number.isFinite(state.binF.mid) && Number.isFinite(state.binS.mid) && state.binS.mid > 0) 
-    ? state.binF.mid / state.binS.mid : NaN;
+  const implied = (Number.isFinite(state.binF.mid) && Number.isFinite(state.binS.mid) && state.binS.mid > 0)
+    ? state.binF.mid / state.binS.mid
+    : NaN;
   setText('xauUsdcImplied', formatUsd(implied, 2));
 }
 
 // ============================================
 // CHARTS
 // ============================================
-function createGradient(ctx, color, height) {
-  const gradient = ctx.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, color.replace(')', ', 0.3)').replace('rgb', 'rgba'));
-  gradient.addColorStop(1, color.replace(')', ', 0)').replace('rgb', 'rgba'));
-  return gradient;
-}
-
 function buildCharts() {
   if (typeof Chart === 'undefined') return;
-  
+
   const baseOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 300 },
+    animation: { duration: 280 },
     interaction: { intersect: false, mode: 'index' },
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#21262d',
+        backgroundColor: COLORS.tooltipBg,
         titleColor: COLORS.textLight,
-        bodyColor: COLORS.text,
-        borderColor: 'rgba(240, 246, 252, 0.1)',
+        bodyColor: COLORS.textLight,
+        borderColor: COLORS.tooltipBorder,
         borderWidth: 1,
         padding: 12,
         displayColors: true,
-        callbacks: {
-          title: items => items[0]?.label || ''
-        }
+        callbacks: { title: items => items[0]?.label || '' }
       }
     },
     scales: {
@@ -388,33 +380,21 @@ function buildCharts() {
       }
     }
   };
-  
-  // Pyth Chart (with gradient fill)
+
+  // Pyth chart
   const pythCtx = $('chartPyth')?.getContext('2d');
   if (pythCtx) {
-    const gradient = pythCtx.createLinearGradient(0, 0, 0, 280);
-    gradient.addColorStop(0, 'rgba(210, 153, 34, 0.25)');
-    gradient.addColorStop(1, 'rgba(210, 153, 34, 0)');
-    
+    const gradient = pythCtx.createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(242, 184, 75, 0.22)');
+    gradient.addColorStop(1, 'rgba(242, 184, 75, 0)');
     state.charts.pyth = new Chart(pythCtx, {
       type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          data: [],
-          borderColor: COLORS.pyth,
-          backgroundColor: gradient,
-          borderWidth: 2,
-          pointRadius: 0,
-          tension: 0.3,
-          fill: true
-        }]
-      },
+      data: { labels: [], datasets: [{ data: [], borderColor: COLORS.pyth, backgroundColor: gradient, borderWidth: 2, pointRadius: 0, tension: 0.25, fill: true }] },
       options: baseOptions
     });
   }
-  
-  // Basis Chart (no fill)
+
+  // Basis chart
   const basisCtx = $('chartBasis')?.getContext('2d');
   if (basisCtx) {
     state.charts.basis = new Chart(basisCtx, {
@@ -422,70 +402,56 @@ function buildCharts() {
       data: {
         labels: [],
         datasets: [
-          { data: [], borderColor: COLORS.binance, borderWidth: 2, pointRadius: 0, tension: 0.3, fill: false },
-          { data: [], borderColor: COLORS.hl, borderWidth: 2, pointRadius: 0, tension: 0.3, fill: false },
-          { data: [], borderColor: COLORS.meteora, borderWidth: 2, pointRadius: 0, tension: 0.3, fill: false }
+          { data: [], borderColor: COLORS.binance, borderWidth: 2, pointRadius: 0, tension: 0.25, fill: false },
+          { data: [], borderColor: COLORS.hl, borderWidth: 2, pointRadius: 0, tension: 0.25, fill: false },
+          { data: [], borderColor: COLORS.meteora, borderWidth: 2, pointRadius: 0, tension: 0.25, fill: false }
         ]
       },
       options: baseOptions
     });
   }
-  
-  // Dislocations Chart (with gradient fills)
+
+  // Dislocations chart
   const dislocCtx = $('chartDisloc')?.getContext('2d');
   if (dislocCtx) {
-    const gradientMet = dislocCtx.createLinearGradient(0, 0, 0, 220);
-    gradientMet.addColorStop(0, 'rgba(163, 113, 247, 0.25)');
-    gradientMet.addColorStop(1, 'rgba(163, 113, 247, 0)');
-    
-    const gradientHl = dislocCtx.createLinearGradient(0, 0, 0, 220);
-    gradientHl.addColorStop(0, 'rgba(63, 185, 80, 0.25)');
-    gradientHl.addColorStop(1, 'rgba(63, 185, 80, 0)');
-    
+    const gradientMet = dislocCtx.createLinearGradient(0, 0, 0, 230);
+    gradientMet.addColorStop(0, 'rgba(179, 140, 255, 0.22)');
+    gradientMet.addColorStop(1, 'rgba(179, 140, 255, 0)');
+
+    const gradientHl = dislocCtx.createLinearGradient(0, 0, 0, 230);
+    gradientHl.addColorStop(0, 'rgba(46, 229, 157, 0.18)');
+    gradientHl.addColorStop(1, 'rgba(46, 229, 157, 0)');
+
     state.charts.disloc = new Chart(dislocCtx, {
       type: 'line',
       data: {
         labels: [],
         datasets: [
-          { data: [], borderColor: COLORS.meteora, backgroundColor: gradientMet, borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true },
-          { data: [], borderColor: COLORS.hl, backgroundColor: gradientHl, borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true }
+          { data: [], borderColor: COLORS.meteora, backgroundColor: gradientMet, borderWidth: 2, pointRadius: 0, tension: 0.25, fill: true },
+          { data: [], borderColor: COLORS.hl, backgroundColor: gradientHl, borderWidth: 2, pointRadius: 0, tension: 0.25, fill: true }
         ]
       },
       options: baseOptions
     });
   }
-  
-  // Funding Chart (with gradient fill)
+
+  // Funding chart
   const fundingCtx = $('chartFunding')?.getContext('2d');
   if (fundingCtx) {
-    const gradient = fundingCtx.createLinearGradient(0, 0, 0, 220);
-    gradient.addColorStop(0, 'rgba(57, 197, 207, 0.25)');
-    gradient.addColorStop(1, 'rgba(57, 197, 207, 0)');
-    
+    const gradient = fundingCtx.createLinearGradient(0, 0, 0, 230);
+    gradient.addColorStop(0, 'rgba(78, 214, 224, 0.18)');
+    gradient.addColorStop(1, 'rgba(78, 214, 224, 0)');
+
     state.charts.funding = new Chart(fundingCtx, {
       type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          data: [],
-          borderColor: COLORS.funding,
-          backgroundColor: gradient,
-          borderWidth: 2,
-          pointRadius: 0,
-          tension: 0.3,
-          fill: true
-        }]
-      },
+      data: { labels: [], datasets: [{ data: [], borderColor: COLORS.funding, backgroundColor: gradient, borderWidth: 2, pointRadius: 0, tension: 0.25, fill: true }] },
       options: {
         ...baseOptions,
         scales: {
           ...baseOptions.scales,
           y: {
             ...baseOptions.scales.y,
-            ticks: {
-              ...baseOptions.scales.y.ticks,
-              callback: v => v.toFixed(2) + '%'
-            }
+            ticks: { ...baseOptions.scales.y.ticks, callback: v => Number(v).toFixed(2) + '%' }
           }
         }
       }
@@ -501,15 +467,13 @@ function prunePoints() {
 function updateCharts() {
   prunePoints();
   const labels = state.points.map(p => formatTime(p.t));
-  
-  // Pyth chart
+
   if (state.charts.pyth) {
     state.charts.pyth.data.labels = labels;
     state.charts.pyth.data.datasets[0].data = state.points.map(p => p.pyth);
     state.charts.pyth.update('none');
   }
-  
-  // Basis chart
+
   if (state.charts.basis) {
     state.charts.basis.data.labels = labels;
     state.charts.basis.data.datasets[0].data = state.points.map(p => state.unit === 'usd' ? p.binBasisUsd : p.binBasisBps);
@@ -517,16 +481,14 @@ function updateCharts() {
     state.charts.basis.data.datasets[2].data = state.points.map(p => state.unit === 'usd' ? p.metBasisUsd : p.metBasisBps);
     state.charts.basis.update('none');
   }
-  
-  // Dislocations chart
+
   if (state.charts.disloc) {
     state.charts.disloc.data.labels = labels;
     state.charts.disloc.data.datasets[0].data = state.points.map(p => state.unit === 'usd' ? p.dislocMBusd : p.dislocMBbps);
     state.charts.disloc.data.datasets[1].data = state.points.map(p => state.unit === 'usd' ? p.dislocMHusd : p.dislocMHbps);
     state.charts.disloc.update('none');
   }
-  
-  // Funding chart
+
   if (state.charts.funding) {
     state.charts.funding.data.labels = labels;
     state.charts.funding.data.datasets[0].data = state.points.map(p => p.apy);
@@ -539,12 +501,11 @@ function updateCharts() {
 // ============================================
 async function tick() {
   if (state.paused) return;
-  
+
   const now = Date.now();
   state.lastTick = now;
   state.prevPrice = state.pyth.price;
-  
-  // Fetch all data in parallel
+
   const [pyth, binF, binS, hl, met] = await Promise.all([
     timedFetch(fetchPyth),
     timedFetch(fetchBinanceFutures),
@@ -552,8 +513,7 @@ async function tick() {
     timedFetch(fetchHyperliquid),
     timedFetch(fetchMeteora)
   ]);
-  
-  // Update state
+
   if (pyth.ok) {
     state.pyth.price = pyth.data.price;
     state.pyth.pubMs = pyth.data.pubMs;
@@ -563,7 +523,7 @@ async function tick() {
     state.pyth.err = 'Pyth: ' + pyth.err;
   }
   state.pyth.latMs = pyth.ms;
-  
+
   if (binF.ok) {
     state.binF.mid = binF.data.mid;
     state.binF.fundRate = binF.data.fundRate;
@@ -574,7 +534,7 @@ async function tick() {
     state.binF.err = 'Binance: ' + binF.err;
   }
   state.binF.latMs = binF.ms;
-  
+
   if (binS.ok) {
     state.binS.mid = binS.data.mid;
     state.binS.okMs = now;
@@ -583,7 +543,7 @@ async function tick() {
     state.binS.err = 'Binance Spot: ' + binS.err;
   }
   state.binS.latMs = binS.ms;
-  
+
   if (hl.ok) {
     state.hl.mid = hl.data.mid;
     state.hl.okMs = now;
@@ -592,7 +552,7 @@ async function tick() {
     state.hl.err = 'Hyperliquid: ' + hl.err;
   }
   state.hl.latMs = hl.ms;
-  
+
   if (met.ok) {
     state.met.mid = met.data.mid;
     state.met.okMs = now;
@@ -601,8 +561,8 @@ async function tick() {
     state.met.err = 'Meteora: ' + met.err;
   }
   state.met.latMs = met.ms;
-  
-  // Calculate derived values
+
+  // Derived values
   const ref = state.pyth.price;
   const binBasisUsd = basisUsd(state.binF.mid, ref);
   const binBasisBps = basisBps(state.binF.mid, ref);
@@ -610,13 +570,13 @@ async function tick() {
   const hlBasisBps = basisBps(state.hl.mid, ref);
   const metBasisUsd = basisUsd(state.met.mid, ref);
   const metBasisBps = basisBps(state.met.mid, ref);
-  
+
   const dislocMBusd = (Number.isFinite(state.met.mid) && Number.isFinite(state.binF.mid)) ? state.met.mid - state.binF.mid : null;
   const dislocMBbps = (dislocMBusd != null && state.binF.mid) ? ((state.met.mid / state.binF.mid) - 1) * 10000 : null;
+
   const dislocMHusd = (Number.isFinite(state.met.mid) && Number.isFinite(state.hl.mid)) ? state.met.mid - state.hl.mid : null;
   const dislocMHbps = (dislocMHusd != null && state.hl.mid) ? ((state.met.mid / state.hl.mid) - 1) * 10000 : null;
-  
-  // Add data point
+
   state.points.push({
     t: now,
     pyth: Number.isFinite(ref) ? ref : null,
@@ -627,8 +587,8 @@ async function tick() {
     dislocMHusd, dislocMHbps,
     apy: fundingApy(state.binF.fundRate)
   });
-  
-  // Update UI
+
+  // UI update
   updateHeader();
   updateStatus();
   updateFeedStatus();
@@ -657,42 +617,38 @@ function startUIUpdates() {
 }
 
 function wireControls() {
-  // Refresh rate
   $('selRefresh')?.addEventListener('change', e => {
     state.refreshMs = Number(e.target.value);
     startPolling();
   });
-  
-  // Time window
+
   $('selWindow')?.addEventListener('change', e => {
     state.windowMs = Number(e.target.value);
     prunePoints();
     updateCharts();
   });
-  
-  // Unit toggle
+
   $('btnUsd')?.addEventListener('click', () => {
     state.unit = 'usd';
     $('btnUsd')?.classList.add('active');
     $('btnBps')?.classList.remove('active');
     updateCharts();
   });
-  
+
   $('btnBps')?.addEventListener('click', () => {
     state.unit = 'bps';
     $('btnBps')?.classList.add('active');
     $('btnUsd')?.classList.remove('active');
     updateCharts();
   });
-  
-  // Pause/Resume
+
   $('btnPause')?.addEventListener('click', () => {
     state.paused = true;
     $('btnPause').disabled = true;
     $('btnResume').disabled = false;
     updateStatus();
   });
-  
+
   $('btnResume')?.addEventListener('click', () => {
     state.paused = false;
     $('btnPause').disabled = false;
@@ -700,15 +656,15 @@ function wireControls() {
     tick();
     updateStatus();
   });
-  
-  // Keyboard shortcuts
+
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-    
-    switch(e.key.toLowerCase()) {
+
+    switch (e.key.toLowerCase()) {
       case 'r':
         if (!state.paused) tick();
         break;
+
       case 'p':
         if (!state.paused) {
           state.paused = true;
@@ -722,6 +678,7 @@ function wireControls() {
         }
         updateStatus();
         break;
+
       case 'u':
         if (state.unit === 'usd') {
           state.unit = 'bps';
